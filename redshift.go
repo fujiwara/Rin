@@ -47,7 +47,7 @@ func ConnectToRedshift(target Target) (*sql.DB, error) {
 }
 
 func ImportRedshift(target Target, record EventRecord) error {
-	log.Println("Import to target %s from record %s", target, record)
+	log.Printf("Import to target %s from record %s", target, record)
 	db, err := ConnectToRedshift(target)
 	if err != nil {
 		return err

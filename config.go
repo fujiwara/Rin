@@ -67,7 +67,7 @@ type S3 struct {
 }
 
 func (s3 S3) String() string {
-	return fmt.Sprintf(S3URITemplate, s3.Bucket, "")
+	return fmt.Sprintf(S3URITemplate, s3.Bucket, s3.KeyPrefix+"*")
 }
 
 type Redshift struct {
@@ -80,7 +80,7 @@ type Redshift struct {
 }
 
 func (r Redshift) DSN() string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s",
+	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s",
 		url.QueryEscape(r.User), url.QueryEscape(r.Password),
 		url.QueryEscape(r.Host), r.Port, url.QueryEscape(r.DBName),
 	)

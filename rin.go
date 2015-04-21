@@ -21,6 +21,9 @@ func Run(configFile string, port int) error {
 	if err != nil {
 		return err
 	}
+	for _, target := range config.Targets {
+		log.Println("Loading target", target)
+	}
 
 	auth := aws.Auth{
 		AccessKey: config.Credentials.AWS_ACCESS_KEY_ID,
@@ -55,7 +58,7 @@ func snsHandler(w http.ResponseWriter, req *http.Request) {
 	var n *sns.HttpNotification
 	dec := json.NewDecoder(req.Body)
 	dec.Decode(&n)
-	log.Println("sns", n.Type, n.TopicArn, n.Subject)
+	log.Println("SNS", n.Type, n.Subject, n.TopicArn)
 	switch n.Type {
 	case "SubscriptionConfirmation":
 		_, err := SNS.ConfirmSubscriptionFromHttp(n, "no")
@@ -64,18 +67,23 @@ func snsHandler(w http.ResponseWriter, req *http.Request) {
 			serverError(w, http.StatusInternalServerError)
 			return
 		}
-	case "Nortification":
+	case "Notification":
 		event, err := ParseEvent([]byte(n.Message))
 		if err != nil {
 			log.Println("Can't parse event string", n.Message, err)
 			serverError(w, http.StatusInternalServerError)
 			return
 		}
+		log.Printf("%#v", event)
 		err = Import(event)
 		if err != nil {
+			log.Println("Import failed:", err)
 			serverError(w, http.StatusInternalServerError)
 			return
 		}
+	default:
+		serverError(w, http.StatusNotFound)
+		return
 	}
 	io.WriteString(w, "OK")
 }

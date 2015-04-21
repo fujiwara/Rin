@@ -8,7 +8,7 @@ targets:
       port: 5432
       dbname: test
       user: test_user
-      pass: test_pass
+      password: test_pass
       table: foo
     s3:
       bucket: test.bucket.test
@@ -20,7 +20,7 @@ targets:
       port: 5432
       dbname: test
       user: test_user
-      pass: test_pass
+      password: test_pass
       table: bar
     s3:
       bucket: test.bucket.test

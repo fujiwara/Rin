@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 
-	rin "github.comf/fujiwara/Rin"
+	rin "github.com/fujiwara/Rin"
 )
 
 func main() {
@@ -11,8 +11,8 @@ func main() {
 		config string
 		port   int
 	)
-	flag.StringVar(&config, "config", "config file path")
-	flag.IntVar(&port, "port", "listen port")
+	flag.StringVar(&config, "config", "config.yaml", "config file path")
+	flag.IntVar(&port, "port", 3000, "listen port")
 	flag.Parse()
 	err := rin.Run(config, port)
 	if err != nil {
