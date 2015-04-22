@@ -11,6 +11,7 @@ func main() {
 		config string
 	)
 	flag.StringVar(&config, "config", "config.yaml", "config file path")
+	flag.BoolVar(&rin.Debug, "debug", false, "enable debug logging")
 	flag.Parse()
 	err := rin.Run(config)
 	if err != nil {

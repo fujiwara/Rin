@@ -14,6 +14,7 @@ import (
 
 var SQS *sqs.SQS
 var config *Config
+var Debug bool
 
 var TrapSignals = []os.Signal{
 	syscall.SIGHUP,
@@ -69,10 +70,23 @@ func waitForRetry() {
 	time.Sleep(10 * time.Second)
 }
 
+func runnable(ch chan interface{}) bool {
+	select {
+	case <-ch:
+		// ch closed == shutdown
+		return false
+	default:
+	}
+	return true
+}
+
 func sqsWorker(wg *sync.WaitGroup, ch chan interface{}) {
 	defer (*wg).Done()
+
 	log.Printf("Starting up SQS Worker")
-	for {
+	defer log.Println("Shutdown SQS Worker")
+
+	for runnable(ch) {
 		log.Println("Connect to SQS:", config.QueueName)
 		queue, err := SQS.GetQueue(config.QueueName)
 		if err != nil {
@@ -80,35 +94,29 @@ func sqsWorker(wg *sync.WaitGroup, ch chan interface{}) {
 			waitForRetry()
 			continue
 		}
-		done, err := handleQueue(queue, ch)
+		quit, err := handleQueue(queue, ch)
 		if err != nil {
 			log.Println("Processing failed:", err)
 			waitForRetry()
 			continue
 		}
-		if done {
+		if quit {
 			break
 		}
 	}
-	defer log.Println("Shutdown SQS Worker")
 }
 
 func handleQueue(queue *sqs.Queue, ch chan interface{}) (bool, error) {
-	for {
-		select {
-		case <-ch:
-			// ch closed == shutdown
-			return true, nil
-		default:
-			err := handleMessages(queue)
-			if err != nil {
-				return false, err
-			}
+	for runnable(ch) {
+		err := handleMessage(queue)
+		if err != nil {
+			return false, err
 		}
 	}
+	return true, nil
 }
 
-func handleMessages(queue *sqs.Queue) error {
+func handleMessage(queue *sqs.Queue) error {
 	res, err := queue.ReceiveMessage(1)
 	if err != nil {
 		return err
@@ -117,7 +125,7 @@ func handleMessages(queue *sqs.Queue) error {
 		return nil
 	}
 	msg := res.Messages[0]
-	log.Printf("Message ID:%s", msg.MessageId)
+	log.Printf("Starting Process message ID:%s", msg.MessageId)
 	event, err := ParseEvent([]byte(msg.Body))
 	if err != nil {
 		log.Println("Can't parse event from Body.", err)
@@ -132,7 +140,7 @@ func handleMessages(queue *sqs.Queue) error {
 	if n == 0 {
 		log.Println("All events were not matched for any targets. Ignored.")
 	} else {
-		log.Printf("%d import actions completed.")
+		log.Printf("%d import action completed.", n)
 	}
 	_, err = queue.DeleteMessage(&msg)
 	if err != nil {
