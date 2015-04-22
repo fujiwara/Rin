@@ -3,6 +3,7 @@ package rin
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 func ParseEvent(b []byte) (Event, error) {
@@ -15,6 +16,14 @@ type Event struct {
 	Records []EventRecord `json:"Records"`
 }
 
+func (e Event) String() string {
+	s := make([]string, len(e.Records))
+	for i, r := range e.Records {
+		s[i] = r.String()
+	}
+	return strings.Join(s, ", ")
+}
+
 type EventRecord struct {
 	EventVersion string  `json:"eventVersion"`
 	EventName    string  `json:"eventName"`
@@ -25,7 +34,7 @@ type EventRecord struct {
 }
 
 func (r EventRecord) String() string {
-	return fmt.Sprintf(S3URITemplate, r.S3.Bucket.Name, r.S3.Object.Key)
+	return r.EventName + " " + fmt.Sprintf(S3URITemplate, r.S3.Bucket.Name, r.S3.Object.Key)
 }
 
 type S3Event struct {

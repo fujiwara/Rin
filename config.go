@@ -16,6 +16,7 @@ const (
 )
 
 type Config struct {
+	QueueName   string      `yaml:"queue_name"`
 	Targets     []Target    `yaml:"targets"`
 	Credentials Credentials `yaml:"credentials"`
 }

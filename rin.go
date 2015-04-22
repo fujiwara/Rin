@@ -1,17 +1,15 @@
 package rin
 
 import (
-	"encoding/json"
-	"fmt"
-	"io"
 	"log"
-	"net/http"
+	"sync"
+	"time"
 
 	"github.com/crowdmob/goamz/aws"
-	"github.com/crowdmob/goamz/sns"
+	"github.com/crowdmob/goamz/sqs"
 )
 
-var SNS *sns.SNS
+var SQS *sqs.SQS
 var config *Config
 
 func Run(configFile string, port int) error {
@@ -30,60 +28,61 @@ func Run(configFile string, port int) error {
 		SecretKey: config.Credentials.AWS_SECRET_ACCESS_KEY,
 	}
 	region := aws.GetRegion(config.Credentials.AWS_REGION)
-	SNS, err = sns.New(auth, region)
-	if err != nil {
-		return err
-	}
-
-	http.HandleFunc("/", snsHandler)
-	addr := fmt.Sprintf(":%d", port)
-	log.Println("Listening", addr)
-
-	log.Fatal(http.ListenAndServe(addr, nil))
+	SQS = sqs.New(auth, region)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		log.Printf("Starting SQS Worker")
+		for {
+			err := sqsWorker()
+			if err != nil {
+				log.Println("SQS Worker error:", err)
+				time.Sleep(10 * time.Second)
+			}
+		}
+	}()
+	wg.Wait()
 	return nil
 }
 
-func serverError(w http.ResponseWriter, code int) {
-	if code == 0 {
-		code = http.StatusInternalServerError
+func sqsWorker() error {
+	log.Println("Connect to SQS:", config.QueueName)
+	queue, err := SQS.GetQueue(config.QueueName)
+	if err != nil {
+		return err
 	}
-	http.Error(w, http.StatusText(code), code)
-}
-
-func snsHandler(w http.ResponseWriter, req *http.Request) {
-	if req.Method != "POST" {
-		serverError(w, http.StatusMethodNotAllowed)
-		return
+	for {
+		res, err := queue.ReceiveMessage(1)
+		if err != nil {
+			return err
+		}
+	Messages:
+		for _, msg := range res.Messages {
+			log.Printf("Message ID:%s", msg.MessageId)
+			event, err := ParseEvent([]byte(msg.Body))
+			if err != nil {
+				log.Println("Can't parse event from Body.", err)
+				continue Messages
+			}
+			log.Println("Importing event:", event)
+			n, err := Import(event)
+			if err != nil {
+				log.Println("Import failed.", err)
+				continue Messages
+			}
+			if n == 0 {
+				log.Println("All events were not matched for any targets. Ignored.")
+			} else {
+				log.Printf("%d import actions completed.")
+			}
+			_, err = queue.DeleteMessage(&msg)
+			if err != nil {
+				log.Println("Can't delete message.", err)
+				continue Messages
+			}
+			log.Printf("Completed message ID:%s", msg.MessageId)
+		}
+		time.Sleep(1 * time.Second)
 	}
-	var n *sns.HttpNotification
-	dec := json.NewDecoder(req.Body)
-	dec.Decode(&n)
-	log.Println("SNS", n.Type, n.Subject, n.TopicArn)
-	switch n.Type {
-	case "SubscriptionConfirmation":
-		_, err := SNS.ConfirmSubscriptionFromHttp(n, "no")
-		if err != nil {
-			log.Println(err)
-			serverError(w, http.StatusInternalServerError)
-			return
-		}
-	case "Notification":
-		event, err := ParseEvent([]byte(n.Message))
-		if err != nil {
-			log.Println("Can't parse event string", n.Message, err)
-			serverError(w, http.StatusInternalServerError)
-			return
-		}
-		log.Printf("%#v", event)
-		err = Import(event)
-		if err != nil {
-			log.Println("Import failed:", err)
-			serverError(w, http.StatusInternalServerError)
-			return
-		}
-	default:
-		serverError(w, http.StatusNotFound)
-		return
-	}
-	io.WriteString(w, "OK")
 }

@@ -13,18 +13,21 @@ var (
 	DBPoolMutex sync.Mutex
 )
 
-func Import(event Event) error {
+func Import(event Event) (int, error) {
+	imported := 0
 	for _, record := range event.Records {
 		for _, target := range config.Targets {
 			if target.MatchEventRecord(record) {
 				err := ImportRedshift(target, record)
 				if err != nil {
-					return err
+					return imported, err
+				} else {
+					imported++
 				}
 			}
 		}
 	}
-	return nil
+	return imported, nil
 }
 
 func ConnectToRedshift(target Target) (*sql.DB, error) {
