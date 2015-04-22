@@ -96,10 +96,20 @@ func LoadConfig(path string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	var config Config
-	err = yaml.Unmarshal(src, &config)
+	var c Config
+	err = yaml.Unmarshal(src, &c)
 	if err != nil {
 		return nil, err
 	}
-	return &config, nil
+	return &c, (&c).Validate()
+}
+
+func (c *Config) Validate() error {
+	if c.QueueName == "" {
+		return fmt.Errorf("queue_name required")
+	}
+	if len(c.Targets) == 0 {
+		return fmt.Errorf("no targets defined")
+	}
+	return nil
 }

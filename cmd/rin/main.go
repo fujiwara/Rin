@@ -9,7 +9,6 @@ import (
 func main() {
 	var (
 		config string
-		port   int
 	)
 	flag.StringVar(&config, "config", "config.yaml", "config file path")
 	flag.Parse()
