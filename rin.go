@@ -15,6 +15,7 @@ import (
 var SQS *sqs.SQS
 var config *Config
 var Debug bool
+var Runnable bool
 
 var TrapSignals = []os.Signal{
 	syscall.SIGHUP,
@@ -24,6 +25,7 @@ var TrapSignals = []os.Signal{
 }
 
 func Run(configFile string) error {
+	Runnable = true
 	var err error
 	log.Println("Loading config", configFile)
 	config, err = LoadConfig(configFile)
@@ -71,9 +73,13 @@ func waitForRetry() {
 }
 
 func runnable(ch chan interface{}) bool {
+	if !Runnable {
+		return false
+	}
 	select {
 	case <-ch:
 		// ch closed == shutdown
+		Runnable = false
 		return false
 	default:
 	}
@@ -125,7 +131,10 @@ func handleMessage(queue *sqs.Queue) error {
 		return nil
 	}
 	msg := res.Messages[0]
-	log.Printf("Starting Process message ID:%s", msg.MessageId)
+	log.Printf("Starting process message id:%s handle:%s", msg.MessageId, msg.ReceiptHandle)
+	if Debug {
+		log.Println("message body:", msg.Body)
+	}
 	event, err := ParseEvent([]byte(msg.Body))
 	if err != nil {
 		log.Println("Can't parse event from Body.", err)
