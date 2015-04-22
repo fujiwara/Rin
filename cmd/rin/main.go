@@ -12,9 +12,8 @@ func main() {
 		port   int
 	)
 	flag.StringVar(&config, "config", "config.yaml", "config file path")
-	flag.IntVar(&port, "port", 3000, "listen port")
 	flag.Parse()
-	err := rin.Run(config, port)
+	err := rin.Run(config)
 	if err != nil {
 		panic(err)
 	}

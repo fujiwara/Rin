@@ -1,3 +1,4 @@
+queue_name: rin_test
 credentials:
   aws_access_key_id: AAA
   aws_secret_access_key: SSS

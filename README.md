@@ -1,11 +1,13 @@
 # Rin
-Rin is a Redshift data Importer by SNS notification via HTTP.
+
+Rin is a Redshift data Importer by SQS messaging.
 
 ## Configuration
 
 config.yaml
 
 ```yaml
+queue_name: my_queue_name
 credentials:
   aws_access_key_id: AAA
   aws_secret_access_key: SSS
@@ -40,5 +42,5 @@ targets:
 ## Run
 
 ```
-$ rin -config config.yaml -port 3000
+$ rin -config config.yaml
 ```

@@ -55,10 +55,10 @@ func TestLoadConfig(t *testing.T) {
 			t.Errorf("unexpected bind param: %s", binds[0])
 		}
 		if binds[1].(string) != e[4] {
-			t.Errorf("unexpected bind param: %s", binds[0])
+			t.Errorf("unexpected bind param: %s", binds[1])
 		}
 		if binds[2].(string) != e[5] {
-			t.Errorf("unexpected bind param: %s", binds[0])
+			t.Errorf("unexpected bind param: %s", binds[2])
 		}
 		log.Println(sql, binds)
 	}

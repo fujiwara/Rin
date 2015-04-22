@@ -12,7 +12,7 @@ import (
 var SQS *sqs.SQS
 var config *Config
 
-func Run(configFile string, port int) error {
+func Run(configFile string) error {
 	var err error
 	log.Println("Loading config", configFile)
 	config, err = LoadConfig(configFile)
