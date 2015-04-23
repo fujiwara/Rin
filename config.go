@@ -12,7 +12,7 @@ import (
 const (
 	S3URITemplate       = "s3://%s/%s"
 	CredentialsTemplate = "aws_access_key_id=%s;aws_secret_access_key=%s"
-	SQLTemplate         = "COPY %s FROM $1 CREDENTIALS $2 REGION $3 %s"
+	SQLTemplate         = "COPY %s FROM $1 CREDENTIALS $2 REGION $3 %s;"
 )
 
 type Config struct {

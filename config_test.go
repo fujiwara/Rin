@@ -11,7 +11,7 @@ var Excepted = [][]string{
 	[]string{
 		"test.bucket.test",
 		"test/foo/xxx.json",
-		"COPY foo FROM $1 CREDENTIALS $2 REGION $3 JSON GZIP",
+		"COPY foo FROM $1 CREDENTIALS $2 REGION $3 JSON 'auto' GZIP",
 		"s3://test.bucket.test/test/foo/xxx.json",
 		"aws_access_key_id=AAA;aws_secret_access_key=SSS",
 		"ap-northeast-1",
