@@ -30,3 +30,10 @@ targets:
     s3:
       key_prefix: test/bar
     sql_option: "CSV DELIMITER ',' ESCAPE"
+
+  - redshift:
+      schema: $1
+      table: $2
+    s3:
+      bucket: example.bucket
+      key_regexp: test/(s[0-9]+)/(t[0-9]+)/

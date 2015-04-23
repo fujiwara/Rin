@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/lib/pq"
@@ -47,20 +49,46 @@ type SQLParam struct {
 	Option string
 }
 
-func (t *Target) Match(bucket, key string) bool {
-	return bucket == t.S3.Bucket && strings.HasPrefix(key, t.S3.KeyPrefix)
-}
-
-func (t *Target) MatchEventRecord(r EventRecord) bool {
-	return r.S3.Bucket.Name == t.S3.Bucket && strings.HasPrefix(r.S3.Object.Key, t.S3.KeyPrefix)
-}
-
-func (t *Target) BuildCopySQL(key string, cred Credentials) (string, error) {
-	var table string
-	if t.Redshift.Schema == "" {
-		table = pq.QuoteIdentifier(t.Redshift.Table)
+func (t *Target) Match(bucket, key string) (bool, *[]string) {
+	if bucket != t.S3.Bucket {
+		return false, nil
+	}
+	if t.S3.KeyPrefix != "" {
+		if strings.HasPrefix(key, t.S3.KeyPrefix) {
+			cap := []string{key}
+			return true, &cap
+		} else {
+			return false, nil
+		}
+	}
+	r, _ := regexp.Compile(t.S3.KeyRegexp)
+	cap := r.FindStringSubmatch(key)
+	if len(cap) == 0 {
+		return false, nil
 	} else {
-		table = pq.QuoteIdentifier(t.Redshift.Schema) + "." + pq.QuoteIdentifier(t.Redshift.Table)
+		return true, &cap
+	}
+}
+
+func (t *Target) MatchEventRecord(r EventRecord) (bool, *[]string) {
+	return t.Match(r.S3.Bucket.Name, r.S3.Object.Key)
+}
+
+func expandPlaceHolder(s string, cap *[]string) string {
+	for i, v := range *cap {
+		s = strings.Replace(s, "$"+strconv.Itoa(i), v, -1)
+	}
+	return s
+}
+
+func (t *Target) BuildCopySQL(key string, cred Credentials, cap *[]string) (string, error) {
+	var table string
+	_table := expandPlaceHolder(t.Redshift.Table, cap)
+	if t.Redshift.Schema == "" {
+		table = pq.QuoteIdentifier(_table)
+	} else {
+		_schema := expandPlaceHolder(t.Redshift.Schema, cap)
+		table = pq.QuoteIdentifier(_schema) + "." + pq.QuoteIdentifier(_table)
 	}
 	query := fmt.Sprintf(
 		SQLTemplate,
@@ -77,10 +105,15 @@ type S3 struct {
 	Region    string `yaml:"region"`
 	Bucket    string `yaml:"bucket"`
 	KeyPrefix string `yaml:"key_prefix"`
+	KeyRegexp string `yaml:"key_regexp"`
 }
 
 func (s3 S3) String() string {
-	return fmt.Sprintf(S3URITemplate, s3.Bucket, s3.KeyPrefix+"*")
+	if s3.KeyPrefix != "" {
+		return fmt.Sprintf(S3URITemplate, s3.Bucket, s3.KeyPrefix)
+	} else {
+		return fmt.Sprintf(S3URITemplate, s3.Bucket, s3.KeyRegexp)
+	}
 }
 
 type Redshift struct {

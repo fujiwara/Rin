@@ -17,8 +17,8 @@ func Import(event Event) (int, error) {
 	imported := 0
 	for _, record := range event.Records {
 		for _, target := range config.Targets {
-			if target.MatchEventRecord(record) {
-				err := ImportRedshift(target, record)
+			if ok, cap := target.MatchEventRecord(record); ok {
+				err := ImportRedshift(target, record, cap)
 				if err != nil {
 					return imported, err
 				} else {
@@ -49,7 +49,7 @@ func ConnectToRedshift(target *Target) (*sql.DB, error) {
 	return db, nil
 }
 
-func ImportRedshift(target *Target, record EventRecord) error {
+func ImportRedshift(target *Target, record EventRecord, cap *[]string) error {
 	log.Printf("Import to target %s from record %s", target, record)
 	db, err := ConnectToRedshift(target)
 	if err != nil {
@@ -61,7 +61,7 @@ func ImportRedshift(target *Target, record EventRecord) error {
 	}
 	defer txn.Rollback()
 
-	query, err := target.BuildCopySQL(record.S3.Object.Key, config.Credentials)
+	query, err := target.BuildCopySQL(record.S3.Object.Key, config.Credentials, cap)
 	if err != nil {
 		return err
 	}
