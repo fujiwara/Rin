@@ -55,6 +55,12 @@ func ImportRedshift(target Target, record EventRecord) error {
 	if err != nil {
 		return err
 	}
+	txn, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer txn.Rollback()
+
 	query, binds, err := target.BuildCopySQL(record.S3.Object.Key, config.Credentials)
 	if err != nil {
 		return err
@@ -67,10 +73,14 @@ func ImportRedshift(target Target, record EventRecord) error {
 		return err
 	}
 	defer stmt.Close()
-	rows, err := stmt.Query(binds...)
+	_, err = stmt.Exec(binds...)
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+
+	err = txn.Commit()
+	if err != nil {
+		return err
+	}
 	return nil
 }
