@@ -30,7 +30,7 @@ func Import(event Event) (int, error) {
 	return imported, nil
 }
 
-func ConnectToRedshift(target Target) (*sql.DB, error) {
+func ConnectToRedshift(target *Target) (*sql.DB, error) {
 	r := target.Redshift
 	dsn := r.DSN()
 
@@ -49,7 +49,7 @@ func ConnectToRedshift(target Target) (*sql.DB, error) {
 	return db, nil
 }
 
-func ImportRedshift(target Target, record EventRecord) error {
+func ImportRedshift(target *Target, record EventRecord) error {
 	log.Printf("Import to target %s from record %s", target, record)
 	db, err := ConnectToRedshift(target)
 	if err != nil {

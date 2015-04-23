@@ -13,7 +13,8 @@ import (
 const (
 	S3URITemplate       = "s3://%s/%s"
 	CredentialsTemplate = "aws_access_key_id=%s;aws_secret_access_key=%s"
-	SQLTemplate         = "COPY %s FROM %s CREDENTIALS '%s' REGION '%s' %s"
+	SQLTemplate         = "/* Rin */ COPY %s FROM %s CREDENTIALS '%s' REGION '%s' %s"
+	// Prefix SQL comment "/* Rin */". Because a query which start with "COPY", pq expect a PostgreSQL COPY command response, but a Redshift response is different it.
 )
 
 func quoteValue(v string) string {
@@ -22,8 +23,11 @@ func quoteValue(v string) string {
 
 type Config struct {
 	QueueName   string      `yaml:"queue_name"`
-	Targets     []Target    `yaml:"targets"`
+	Targets     []*Target   `yaml:"targets"`
 	Credentials Credentials `yaml:"credentials"`
+	Redshift    *Redshift   `yaml:"redshift"`
+	S3          *S3         `yaml:"s3"`
+	SQLOption   string      `yaml:"sql_option"`
 }
 
 type Credentials struct {
@@ -33,9 +37,9 @@ type Credentials struct {
 }
 
 type Target struct {
-	Redshift  Redshift `yaml:"redshift"`
-	S3        S3       `yaml:"s3"`
-	SQLOption string   `yaml:"sql_option"`
+	Redshift  *Redshift `yaml:"redshift"`
+	S3        *S3       `yaml:"s3"`
+	SQLOption string    `yaml:"sql_option"`
 }
 
 type SQLParam struct {
@@ -110,10 +114,11 @@ func LoadConfig(path string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &c, (&c).Validate()
+	(&c).merge()
+	return &c, (&c).validate()
 }
 
-func (c *Config) Validate() error {
+func (c *Config) validate() error {
 	if c.QueueName == "" {
 		return fmt.Errorf("queue_name required")
 	}
@@ -121,4 +126,47 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("no targets defined")
 	}
 	return nil
+}
+
+func (c *Config) merge() {
+	cr := c.Redshift
+	cs := c.S3
+	for _, t := range c.Targets {
+		if t.SQLOption == "" {
+			t.SQLOption = c.SQLOption
+		}
+		tr := t.Redshift
+		if tr.Host == "" {
+			tr.Host = cr.Host
+		}
+		if tr.Port == 0 {
+			tr.Port = cr.Port
+		}
+		if tr.DBName == "" {
+			tr.DBName = cr.DBName
+		}
+		if tr.User == "" {
+			tr.User = cr.User
+		}
+		if tr.Password == "" {
+			tr.Password = cr.Password
+		}
+		if tr.Schema == "" {
+			tr.Schema = cr.Schema
+		}
+		if tr.Table == "" {
+			tr.Table = cr.Table
+		}
+
+		ts := t.S3
+		if ts.Bucket == "" {
+			ts.Bucket = cs.Bucket
+		}
+		if ts.Region == "" {
+			ts.Region = cs.Region
+		}
+		if ts.KeyPrefix == "" {
+			ts.KeyPrefix = cs.KeyPrefix
+		}
+	}
 }

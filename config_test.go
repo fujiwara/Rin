@@ -11,17 +11,21 @@ var Excepted = [][]string{
 	[]string{
 		"test.bucket.test",
 		"test/foo/xxx.json",
-		`COPY "foo" FROM 's3://test.bucket.test/test/foo/xxx.json' CREDENTIALS 'aws_access_key_id=AAA;aws_secret_access_key=SSS' REGION 'ap-northeast-1' JSON 'auto' GZIP`,
+		`/* Rin */ COPY "foo" FROM 's3://test.bucket.test/test/foo/xxx.json' CREDENTIALS 'aws_access_key_id=AAA;aws_secret_access_key=SSS' REGION 'ap-northeast-1' JSON 'auto' GZIP`,
 	},
 	[]string{
 		"test.bucket.test",
 		"test/bar/y's.csv",
-		`COPY "xxx"."bar" FROM 's3://test.bucket.test/test/bar/y''s.csv' CREDENTIALS 'aws_access_key_id=AAA;aws_secret_access_key=SSS' REGION 'ap-northeast-1' CSV DELIMITER ',' ESCAPE`,
+		`/* Rin */ COPY "xxx"."bar" FROM 's3://test.bucket.test/test/bar/y''s.csv' CREDENTIALS 'aws_access_key_id=AAA;aws_secret_access_key=SSS' REGION 'ap-northeast-1' CSV DELIMITER ',' ESCAPE`,
 	},
 }
 
 func TestLoadConfig(t *testing.T) {
 	config, err := rin.LoadConfig("test/config.yml")
+	for _, t := range config.Targets {
+		log.Printf("%#v", t)
+	}
+	log.Println("global.sql_option", config.SQLOption)
 	if err != nil {
 		t.Errorf("load config failed: %s", err)
 	}
