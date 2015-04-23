@@ -6,14 +6,19 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/lib/pq"
 	"gopkg.in/yaml.v1"
 )
 
 const (
 	S3URITemplate       = "s3://%s/%s"
 	CredentialsTemplate = "aws_access_key_id=%s;aws_secret_access_key=%s"
-	SQLTemplate         = "COPY %s FROM $1 CREDENTIALS $2 REGION $3 %s;"
+	SQLTemplate         = "COPY %s FROM %s CREDENTIALS '%s' REGION '%s' %s"
 )
+
+func quoteValue(v string) string {
+	return "'" + strings.Replace(v, "'", "''", -1) + "'"
+}
 
 type Config struct {
 	QueueName   string      `yaml:"queue_name"`
@@ -46,19 +51,22 @@ func (t *Target) MatchEventRecord(r EventRecord) bool {
 	return r.S3.Bucket.Name == t.S3.Bucket && strings.HasPrefix(r.S3.Object.Key, t.S3.KeyPrefix)
 }
 
-func (t *Target) BuildCopySQL(key string, cred Credentials) (string, []interface{}, error) {
-	binds := []interface{}{
-		fmt.Sprintf(S3URITemplate, t.S3.Bucket, key), // s3 uri
-		fmt.Sprintf(CredentialsTemplate, cred.AWS_ACCESS_KEY_ID, cred.AWS_SECRET_ACCESS_KEY),
-		t.S3.Region,
+func (t *Target) BuildCopySQL(key string, cred Credentials) (string, error) {
+	var table string
+	if t.Redshift.Schema == "" {
+		table = pq.QuoteIdentifier(t.Redshift.Table)
+	} else {
+		table = pq.QuoteIdentifier(t.Redshift.Schema) + "." + pq.QuoteIdentifier(t.Redshift.Table)
 	}
-
 	query := fmt.Sprintf(
 		SQLTemplate,
-		t.Redshift.Table,
+		table,
+		quoteValue(fmt.Sprintf(S3URITemplate, t.S3.Bucket, key)),
+		fmt.Sprintf(CredentialsTemplate, cred.AWS_ACCESS_KEY_ID, cred.AWS_SECRET_ACCESS_KEY),
+		t.S3.Region,
 		t.SQLOption,
 	)
-	return query, binds, nil
+	return query, nil
 }
 
 type S3 struct {
@@ -77,6 +85,7 @@ type Redshift struct {
 	DBName   string `yaml:"dbname"`
 	User     string `yaml:"user"`
 	Password string `yaml:"password"`
+	Schema   string `yaml:"schema"`
 	Table    string `yaml:"table"`
 }
 

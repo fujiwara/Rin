@@ -11,18 +11,12 @@ var Excepted = [][]string{
 	[]string{
 		"test.bucket.test",
 		"test/foo/xxx.json",
-		"COPY foo FROM $1 CREDENTIALS $2 REGION $3 JSON 'auto' GZIP",
-		"s3://test.bucket.test/test/foo/xxx.json",
-		"aws_access_key_id=AAA;aws_secret_access_key=SSS",
-		"ap-northeast-1",
+		`COPY "foo" FROM 's3://test.bucket.test/test/foo/xxx.json' CREDENTIALS 'aws_access_key_id=AAA;aws_secret_access_key=SSS' REGION 'ap-northeast-1' JSON 'auto' GZIP`,
 	},
 	[]string{
 		"test.bucket.test",
-		"test/bar/yyy.csv",
-		"COPY bar FROM $1 CREDENTIALS $2 REGION $3 CSV DELIMITER ',' ESCAPE",
-		"s3://test.bucket.test/test/bar/yyy.csv",
-		"aws_access_key_id=AAA;aws_secret_access_key=SSS",
-		"ap-northeast-1",
+		"test/bar/y's.csv",
+		`COPY "xxx"."bar" FROM 's3://test.bucket.test/test/bar/y''s.csv' CREDENTIALS 'aws_access_key_id=AAA;aws_secret_access_key=SSS' REGION 'ap-northeast-1' CSV DELIMITER ',' ESCAPE`,
 	},
 }
 
@@ -41,25 +35,13 @@ func TestLoadConfig(t *testing.T) {
 		if !target.Match(bucket, key) {
 			t.Errorf("%s %s is not match target: %s", bucket, key, target)
 		}
-		sql, binds, err := target.BuildCopySQL(key, config.Credentials)
+		sql, err := target.BuildCopySQL(key, config.Credentials)
 		if err != nil {
 			t.Error(err)
 		}
 		if sql != e[2] {
 			t.Errorf("unexpected SQL: %s", sql)
 		}
-		if len(binds) != 3 {
-			t.Errorf("unexpected bind params: %#v", binds)
-		}
-		if binds[0].(string) != e[3] {
-			t.Errorf("unexpected bind param: %s", binds[0])
-		}
-		if binds[1].(string) != e[4] {
-			t.Errorf("unexpected bind param: %s", binds[1])
-		}
-		if binds[2].(string) != e[5] {
-			t.Errorf("unexpected bind param: %s", binds[2])
-		}
-		log.Println(sql, binds)
+		log.Println(sql)
 	}
 }

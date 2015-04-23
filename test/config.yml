@@ -22,6 +22,7 @@ targets:
       dbname: test
       user: test_user
       password: test_pass
+      schema: xxx
       table: bar
     s3:
       bucket: test.bucket.test
