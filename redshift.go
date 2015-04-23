@@ -68,7 +68,7 @@ func ImportRedshift(target Target, record EventRecord) error {
 	if Debug {
 		log.Printf("SQL: %s %#v", query, binds)
 	}
-	stmt, err := db.Prepare(query)
+	stmt, err := txn.Prepare(query)
 	if err != nil {
 		return err
 	}
