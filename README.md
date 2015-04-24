@@ -2,9 +2,22 @@
 
 Rin is a Redshift data Importer by SQS messaging.
 
+## Architecture
+
+1. (Someone) creates a S3 object.
+2. [S3 event notifications](https://docs.aws.amazon.com/AmazonS3/latest/dev/NotificationHowTo.html) will send to a message to SQS.
+3. Rin will fetch messages from SQS, and publish a "COPY" query to Redshift.
+
 ## Configuration
 
-config.yaml
+[Configuring Amazon S3 Event Notifications](https://docs.aws.amazon.com/AmazonS3/latest/dev/NotificationHowTo.html).
+
+1. Create SQS queue.
+2. Attach SQS access policy to the queue. [Example Walkthrough 1:](https://docs.aws.amazon.com/AmazonS3/latest/dev/ways-to-add-notification-config-to-bucket.html)
+3. [Enable Event Notifications](http://docs.aws.amazon.com/AmazonS3/latest/UG/SettingBucketNotifications.html) on a S3 bucket.
+4. Run `rin` process with configuration for using the SQS and S3.
+
+### config.yaml
 
 ```yaml
 queue_name: my_queue_name    # SQS queue name
