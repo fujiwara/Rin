@@ -77,6 +77,19 @@ targets:
 
 ## Run
 
+
+### daemon mode
+
+Rin waits new SQS messages and processing it continually.
+
 ```
 $ rin -config config.yaml [-debug]
+```
+
+### batch mode
+
+Rin process new SQS messages and exit.
+
+```
+$ rin -config config.yaml -batch [-debug]
 ```
