@@ -4,7 +4,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
@@ -24,10 +23,18 @@ var TrapSignals = []os.Signal{
 	syscall.SIGQUIT,
 }
 
-func Run(configFile string) error {
+type NoMessageError struct {
+	s string
+}
+
+func (e *NoMessageError) Error() string {
+	return e.s
+}
+
+func Run(configFile string, batchMode bool) error {
 	Runnable = true
 	var err error
-	log.Println("Loading config", configFile)
+	log.Println("Loading config:", configFile)
 	config, err = LoadConfig(configFile)
 	if err != nil {
 		return err
@@ -44,26 +51,40 @@ func Run(configFile string) error {
 	SQS = sqs.New(auth, region)
 
 	shutdownCh := make(chan interface{})
+	exitCh := make(chan int)
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, TrapSignals...)
 
 	// run worker
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go sqsWorker(&wg, shutdownCh)
+	if batchMode {
+		go func() {
+			err := sqsBatch(shutdownCh)
+			if err != nil {
+				log.Println(err)
+				exitCh <- 1
+			}
+			exitCh <- 0
+		}()
+	} else {
+		go sqsWorker(shutdownCh)
+	}
 
 	// wait for signal
-	s := <-signalCh
-	switch sig := s.(type) {
-	case syscall.Signal:
-		log.Printf("Got signal: %s(%d)", sig, sig)
-	default:
+	var exitCode int
+	select {
+	case s := <-signalCh:
+		switch sig := s.(type) {
+		case syscall.Signal:
+			log.Printf("Got signal: %s(%d)", sig, sig)
+		default:
+		}
+		log.Println("Shutting down worker...")
+		close(shutdownCh) // notify shutdown to worker
+	case exitCode = <-exitCh:
 	}
-	log.Println("Shutting down worker...")
-	close(shutdownCh) // notify shutdown to worker
 
-	wg.Wait() // wait for worker completed
-	log.Println("Shutdown successfully")
+	log.Println("Shutdown.")
+	os.Exit(exitCode)
 	return nil
 }
 
@@ -86,9 +107,30 @@ func runnable(ch chan interface{}) bool {
 	return true
 }
 
-func sqsWorker(wg *sync.WaitGroup, ch chan interface{}) {
-	defer (*wg).Done()
+func sqsBatch(ch chan interface{}) error {
+	log.Printf("Starting up SQS Batch")
+	defer log.Println("Shutdown SQS Batch")
 
+	log.Println("Connect to SQS:", config.QueueName)
+	queue, err := SQS.GetQueue(config.QueueName)
+	if err != nil {
+		return err
+	}
+	for runnable(ch) {
+		err := handleMessage(queue)
+		if err != nil {
+			if _, ok := err.(*NoMessageError); ok {
+				log.Println(err)
+				break
+			} else {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func sqsWorker(ch chan interface{}) {
 	log.Printf("Starting up SQS Worker")
 	defer log.Println("Shutdown SQS Worker")
 
@@ -116,7 +158,11 @@ func handleQueue(queue *sqs.Queue, ch chan interface{}) (bool, error) {
 	for runnable(ch) {
 		err := handleMessage(queue)
 		if err != nil {
-			return false, err
+			if _, ok := err.(*NoMessageError); ok {
+				continue
+			} else {
+				return false, err
+			}
 		}
 	}
 	return true, nil
@@ -128,7 +174,7 @@ func handleMessage(queue *sqs.Queue) error {
 		return err
 	}
 	if len(res.Messages) == 0 {
-		return nil
+		return &NoMessageError{"No messages"}
 	}
 	msg := res.Messages[0]
 	log.Printf("Starting process message id:%s handle:%s", msg.MessageId, msg.ReceiptHandle)
