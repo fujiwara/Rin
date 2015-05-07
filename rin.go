@@ -178,9 +178,10 @@ func handleMessage(queue *sqs.Queue) error {
 		return &NoMessageError{"No messages"}
 	}
 	msg := res.Messages[0]
-	log.Printf("[info] Starting process message id:%s handle:%s", msg.MessageId, msg.ReceiptHandle)
+	log.Println("[info] Starting process message ID:", msg.MessageId)
 	if Debug {
-		log.Println("[debug] message body:", msg.Body)
+		log.Println("[degug] handle:", msg.ReceiptHandle)
+		log.Println("[debug] body:", msg.Body)
 	}
 	defer func() {
 		if !completed {
@@ -209,6 +210,6 @@ func handleMessage(queue *sqs.Queue) error {
 		log.Println("[error] Can't delete message.", err)
 	}
 	completed = true
-	log.Printf("[info] Completed message ID:%s", msg.MessageId)
+	log.Println("[info] Completed message ID:", msg.MessageId)
 	return nil
 }
