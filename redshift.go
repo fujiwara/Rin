@@ -49,7 +49,7 @@ func ConnectToRedshift(target *Target) (*sql.DB, error) {
 	return db, nil
 }
 
-func ImportRedshift(target *Target, record EventRecord, cap *[]string) error {
+func ImportRedshift(target *Target, record *EventRecord, cap *[]string) error {
 	log.Printf("Import to target %s from record %s", target, record)
 	db, err := ConnectToRedshift(target)
 	if err != nil {

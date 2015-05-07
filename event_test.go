@@ -35,7 +35,7 @@ var eventStr = `{
           "arn": "arn:aws:s3:::test.bucket.test"
         },
         "object": {
-          "key": "foo/bar.json",
+          "key": "foo/bar%3Dbaz.json",
           "size": 443,
           "eTag": "86fcdfb65af50a994cf63ddd280cea0d"
         }
@@ -63,7 +63,7 @@ func TestParseEvent(t *testing.T) {
 	if r.S3.Bucket.Name != "test.bucket.test" {
 		t.Error("unexpected bucket name", r.S3.Bucket.Name)
 	}
-	if r.S3.Object.Key != "foo/bar.json" {
+	if r.S3.Object.Key != "foo/bar=baz.json" {
 		t.Error("unexpected key", r.S3.Object.Key)
 	}
 }

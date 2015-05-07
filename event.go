@@ -3,17 +3,26 @@ package rin
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 )
 
 func ParseEvent(b []byte) (Event, error) {
 	var e Event
 	err := json.Unmarshal(b, &e)
+	for _, r := range e.Records {
+		if !strings.Contains(r.S3.Object.Key, "%") {
+			continue
+		}
+		if _key, err := url.QueryUnescape(r.S3.Object.Key); err == nil {
+			r.S3.Object.Key = _key
+		}
+	}
 	return e, err
 }
 
 type Event struct {
-	Records []EventRecord `json:"Records"`
+	Records []*EventRecord `json:"Records"`
 }
 
 func (e Event) String() string {

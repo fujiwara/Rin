@@ -70,7 +70,7 @@ func (t *Target) Match(bucket, key string) (bool, *[]string) {
 	}
 }
 
-func (t *Target) MatchEventRecord(r EventRecord) (bool, *[]string) {
+func (t *Target) MatchEventRecord(r *EventRecord) (bool, *[]string) {
 	return t.Match(r.S3.Bucket.Name, r.S3.Object.Key)
 }
 
