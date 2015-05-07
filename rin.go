@@ -169,6 +169,7 @@ func handleQueue(queue *sqs.Queue, ch chan interface{}) (bool, error) {
 }
 
 func handleMessage(queue *sqs.Queue) error {
+	var completed = false
 	res, err := queue.ReceiveMessage(1)
 	if err != nil {
 		return err
@@ -181,6 +182,12 @@ func handleMessage(queue *sqs.Queue) error {
 	if Debug {
 		log.Println("[debug] message body:", msg.Body)
 	}
+	defer func() {
+		if !completed {
+			log.Printf("[info] Aborted message ID:%s", msg.MessageId)
+		}
+	}()
+
 	event, err := ParseEvent([]byte(msg.Body))
 	if err != nil {
 		log.Println("[error] Can't parse event from Body.", err)
@@ -201,6 +208,7 @@ func handleMessage(queue *sqs.Queue) error {
 	if err != nil {
 		log.Println("[error] Can't delete message.", err)
 	}
+	completed = true
 	log.Printf("[info] Completed message ID:%s", msg.MessageId)
 	return nil
 }
