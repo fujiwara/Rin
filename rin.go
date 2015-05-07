@@ -34,13 +34,13 @@ func (e *NoMessageError) Error() string {
 func Run(configFile string, batchMode bool) error {
 	Runnable = true
 	var err error
-	log.Println("Loading config:", configFile)
+	log.Println("[info] Loading config:", configFile)
 	config, err = LoadConfig(configFile)
 	if err != nil {
 		return err
 	}
 	for _, target := range config.Targets {
-		log.Println("Define target", target)
+		log.Println("[info] Define target", target)
 	}
 
 	auth := aws.Auth{
@@ -60,7 +60,7 @@ func Run(configFile string, batchMode bool) error {
 		go func() {
 			err := sqsBatch(shutdownCh)
 			if err != nil {
-				log.Println(err)
+				log.Println("[error]", err)
 				exitCh <- 1
 			}
 			exitCh <- 0
@@ -75,21 +75,21 @@ func Run(configFile string, batchMode bool) error {
 	case s := <-signalCh:
 		switch sig := s.(type) {
 		case syscall.Signal:
-			log.Printf("Got signal: %s(%d)", sig, sig)
+			log.Printf("[info] Got signal: %s(%d)", sig, sig)
 		default:
 		}
-		log.Println("Shutting down worker...")
+		log.Println("[info] Shutting down worker...")
 		close(shutdownCh) // notify shutdown to worker
 	case exitCode = <-exitCh:
 	}
 
-	log.Println("Shutdown.")
+	log.Println("[info] Shutdown.")
 	os.Exit(exitCode)
 	return nil
 }
 
 func waitForRetry() {
-	log.Println("Retry after 10 sec.")
+	log.Println("[warn] Retry after 10 sec.")
 	time.Sleep(10 * time.Second)
 }
 
@@ -108,10 +108,10 @@ func runnable(ch chan interface{}) bool {
 }
 
 func sqsBatch(ch chan interface{}) error {
-	log.Printf("Starting up SQS Batch")
-	defer log.Println("Shutdown SQS Batch")
+	log.Printf("[info] Starting up SQS Batch")
+	defer log.Println("[info] Shutdown SQS Batch")
 
-	log.Println("Connect to SQS:", config.QueueName)
+	log.Println("[info] Connect to SQS:", config.QueueName)
 	queue, err := SQS.GetQueue(config.QueueName)
 	if err != nil {
 		return err
@@ -120,7 +120,7 @@ func sqsBatch(ch chan interface{}) error {
 		err := handleMessage(queue)
 		if err != nil {
 			if _, ok := err.(*NoMessageError); ok {
-				log.Println(err)
+				log.Println("[error]", err)
 				break
 			} else {
 				return err
@@ -131,20 +131,20 @@ func sqsBatch(ch chan interface{}) error {
 }
 
 func sqsWorker(ch chan interface{}) {
-	log.Printf("Starting up SQS Worker")
-	defer log.Println("Shutdown SQS Worker")
+	log.Printf("[info] Starting up SQS Worker")
+	defer log.Println("[info] Shutdown SQS Worker")
 
 	for runnable(ch) {
-		log.Println("Connect to SQS:", config.QueueName)
+		log.Println("[info] Connect to SQS:", config.QueueName)
 		queue, err := SQS.GetQueue(config.QueueName)
 		if err != nil {
-			log.Println("Can't get queue:", err)
+			log.Println("[error] Can't get queue:", err)
 			waitForRetry()
 			continue
 		}
 		quit, err := handleQueue(queue, ch)
 		if err != nil {
-			log.Println("Processing failed:", err)
+			log.Println("[error] Processing failed:", err)
 			waitForRetry()
 			continue
 		}
@@ -177,30 +177,30 @@ func handleMessage(queue *sqs.Queue) error {
 		return &NoMessageError{"No messages"}
 	}
 	msg := res.Messages[0]
-	log.Printf("Starting process message id:%s handle:%s", msg.MessageId, msg.ReceiptHandle)
+	log.Printf("[info] Starting process message id:%s handle:%s", msg.MessageId, msg.ReceiptHandle)
 	if Debug {
-		log.Println("message body:", msg.Body)
+		log.Println("[debug] message body:", msg.Body)
 	}
 	event, err := ParseEvent([]byte(msg.Body))
 	if err != nil {
-		log.Println("Can't parse event from Body.", err)
+		log.Println("[error] Can't parse event from Body.", err)
 		return err
 	}
-	log.Println("Importing event:", event)
+	log.Println("[info] Importing event:", event)
 	n, err := Import(event)
 	if err != nil {
-		log.Println("Import failed.", err)
+		log.Println("[error] Import failed.", err)
 		return err
 	}
 	if n == 0 {
-		log.Println("All events were not matched for any targets. Ignored.")
+		log.Println("[warn] All events were not matched for any targets. Ignored.")
 	} else {
-		log.Printf("%d import action completed.", n)
+		log.Printf("[info] %d import action completed.", n)
 	}
 	_, err = queue.DeleteMessage(&msg)
 	if err != nil {
-		log.Println("Can't delete message.", err)
+		log.Println("[error] Can't delete message.", err)
 	}
-	log.Printf("Completed message ID:%s", msg.MessageId)
+	log.Printf("[info] Completed message ID:%s", msg.MessageId)
 	return nil
 }

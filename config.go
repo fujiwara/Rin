@@ -134,7 +134,11 @@ func (r Redshift) DSN() string {
 }
 
 func (r Redshift) String() string {
-	return r.DSN() + "?table=" + r.Table
+	if r.Schema == "" {
+		return fmt.Sprintf("%s/public.%s", r.DSN(), r.Table)
+	} else {
+		return fmt.Sprintf("%s/%s.%s", r.DSN(), r.Schema, r.Table)
+	}
 }
 
 func LoadConfig(path string) (*Config, error) {

@@ -28,7 +28,7 @@ var Excepted = [][]string{
 func TestLoadConfig(t *testing.T) {
 	config, err := rin.LoadConfig("test/config.yml")
 	for _, t := range config.Targets {
-		log.Printf("%#v", t)
+		log.Println("target:", t)
 	}
 	log.Println("global.sql_option", config.SQLOption)
 	if err != nil {
