@@ -178,38 +178,38 @@ func handleMessage(queue *sqs.Queue) error {
 		return &NoMessageError{"No messages"}
 	}
 	msg := res.Messages[0]
-	log.Println("[info] Starting process message ID:", msg.MessageId)
+	log.Printf("[info] [%s] Starting process message.", msg.MessageId)
 	if Debug {
-		log.Println("[degug] handle:", msg.ReceiptHandle)
-		log.Println("[debug] body:", msg.Body)
+		log.Printf("[degug] [%s] handle: %s", msg.MessageId, msg.ReceiptHandle)
+		log.Printf("[debug] [%s] body: %s", msg.MessageId, msg.Body)
 	}
 	defer func() {
 		if !completed {
-			log.Printf("[info] Aborted message ID:%s", msg.MessageId)
+			log.Printf("[info] [%s] Aborted message.", msg.MessageId)
 		}
 	}()
 
 	event, err := ParseEvent([]byte(msg.Body))
 	if err != nil {
-		log.Println("[error] Can't parse event from Body.", err)
+		log.Printf("[error] [%s] Can't parse event from Body.", msg.MessageId, err)
 		return err
 	}
-	log.Println("[info] Importing event:", event)
+	log.Printf("[info] [%s] Importing event: %s", msg.MessageId, event)
 	n, err := Import(event)
 	if err != nil {
-		log.Println("[error] Import failed.", err)
+		log.Printf("[error] [%s] Import failed. %s", msg.MessageId, err)
 		return err
 	}
 	if n == 0 {
-		log.Println("[warn] All events were not matched for any targets. Ignored.")
+		log.Printf("[warn] [%s] All events were not matched for any targets. Ignored.", msg.MessageId)
 	} else {
-		log.Printf("[info] %d import action completed.", n)
+		log.Printf("[info] [%s] %d import action completed.", msg.MessageId, n)
 	}
 	_, err = queue.DeleteMessage(&msg)
 	if err != nil {
-		log.Println("[error] Can't delete message.", err)
+		log.Printf("[error] [%s] Can't delete message. %s", msg.MessageId, err)
 	}
 	completed = true
-	log.Println("[info] Completed message ID:", msg.MessageId)
+	log.Printf("[info] [%s] Completed message.", msg.MessageId)
 	return nil
 }
