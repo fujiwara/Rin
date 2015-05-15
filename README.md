@@ -58,7 +58,7 @@ targets:
       schema: $1      # expand by key_regexp captured value.
       table: $2
     s3:
-      key_regexp: test/(schema-[a-z])/(table-[a-z])/
+      key_regexp: test/schema-([a-z]+)/table-([a-z]+)/
 
   - redshift:
       host: redshift.example.com       # override default section in this target
