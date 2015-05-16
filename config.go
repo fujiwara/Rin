@@ -39,9 +39,10 @@ type Credentials struct {
 }
 
 type Target struct {
-	Redshift  *Redshift `yaml:"redshift"`
-	S3        *S3       `yaml:"s3"`
-	SQLOption string    `yaml:"sql_option"`
+	Redshift   *Redshift `yaml:"redshift"`
+	S3         *S3       `yaml:"s3"`
+	SQLOption  string    `yaml:"sql_option"`
+	keyMatcher func(string) (bool, *[]string)
 }
 
 type SQLParam struct {
@@ -49,29 +50,43 @@ type SQLParam struct {
 	Option string
 }
 
+func (t *Target) String() string {
+	return strings.Join([]string{t.S3.String(), t.Redshift.String()}, " => ")
+}
+
 func (t *Target) Match(bucket, key string) (bool, *[]string) {
 	if bucket != t.S3.Bucket {
 		return false, nil
 	}
-	if t.S3.KeyPrefix != "" {
-		if strings.HasPrefix(key, t.S3.KeyPrefix) {
-			cap := []string{key}
-			return true, &cap
-		} else {
-			return false, nil
-		}
-	}
-	r, _ := regexp.Compile(t.S3.KeyRegexp)
-	cap := r.FindStringSubmatch(key)
-	if len(cap) == 0 {
-		return false, nil
-	} else {
-		return true, &cap
-	}
+	return t.keyMatcher(key)
 }
 
 func (t *Target) MatchEventRecord(r *EventRecord) (bool, *[]string) {
 	return t.Match(r.S3.Bucket.Name, r.S3.Object.Key)
+}
+
+func (t *Target) buildKeyMatcher() {
+	if prefix := t.S3.KeyPrefix; prefix != "" {
+		t.keyMatcher = func(key string) (bool, *[]string) {
+			if strings.HasPrefix(key, prefix) {
+				cap := []string{key}
+				return true, &cap
+			} else {
+				return false, nil
+			}
+		}
+	} else {
+		r := regexp.MustCompile(t.S3.KeyRegexp)
+		t.keyMatcher = func(key string) (bool, *[]string) {
+			cap := r.FindStringSubmatch(key)
+			if len(cap) == 0 {
+				return false, nil
+			} else {
+				return true, &cap
+			}
+		}
+	}
+	return
 }
 
 func expandPlaceHolder(s string, cap *[]string) string {
@@ -133,11 +148,18 @@ func (r Redshift) DSN() string {
 	)
 }
 
+func (r Redshift) VisibleDSN() string {
+	return fmt.Sprintf("redshift://%s:****@%s:%d/%s",
+		url.QueryEscape(r.User),
+		url.QueryEscape(r.Host), r.Port, url.QueryEscape(r.DBName),
+	)
+}
+
 func (r Redshift) String() string {
 	if r.Schema == "" {
-		return fmt.Sprintf("%s/public.%s", r.DSN(), r.Table)
+		return fmt.Sprintf("%s/public.%s", r.VisibleDSN(), r.Table)
 	} else {
-		return fmt.Sprintf("%s/%s.%s", r.DSN(), r.Schema, r.Table)
+		return fmt.Sprintf("%s/%s.%s", r.VisibleDSN(), r.Schema, r.Table)
 	}
 }
 
@@ -173,37 +195,49 @@ func (c *Config) merge() {
 			t.SQLOption = c.SQLOption
 		}
 		tr := t.Redshift
-		if tr.Host == "" {
-			tr.Host = cr.Host
-		}
-		if tr.Port == 0 {
-			tr.Port = cr.Port
-		}
-		if tr.DBName == "" {
-			tr.DBName = cr.DBName
-		}
-		if tr.User == "" {
-			tr.User = cr.User
-		}
-		if tr.Password == "" {
-			tr.Password = cr.Password
-		}
-		if tr.Schema == "" {
-			tr.Schema = cr.Schema
-		}
-		if tr.Table == "" {
-			tr.Table = cr.Table
+		if tr == nil {
+			t.Redshift = cr
+		} else {
+			if tr.Host == "" {
+				tr.Host = cr.Host
+			}
+			if tr.Port == 0 {
+				tr.Port = cr.Port
+			}
+			if tr.DBName == "" {
+				tr.DBName = cr.DBName
+			}
+			if tr.User == "" {
+				tr.User = cr.User
+			}
+			if tr.Password == "" {
+				tr.Password = cr.Password
+			}
+			if tr.Schema == "" {
+				tr.Schema = cr.Schema
+			}
+			if tr.Table == "" {
+				tr.Table = cr.Table
+			}
 		}
 
 		ts := t.S3
-		if ts.Bucket == "" {
-			ts.Bucket = cs.Bucket
+		if ts == nil {
+			t.S3 = cs
+		} else {
+			if ts.Bucket == "" {
+				ts.Bucket = cs.Bucket
+			}
+			if ts.Region == "" {
+				ts.Region = cs.Region
+			}
+			if ts.KeyPrefix == "" {
+				ts.KeyPrefix = cs.KeyPrefix
+			}
+			if ts.KeyRegexp == "" {
+				ts.KeyRegexp = cs.KeyRegexp
+			}
 		}
-		if ts.Region == "" {
-			ts.Region = cs.Region
-		}
-		if ts.KeyPrefix == "" {
-			ts.KeyPrefix = cs.KeyPrefix
-		}
+		t.buildKeyMatcher()
 	}
 }

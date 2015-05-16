@@ -120,7 +120,6 @@ func sqsBatch(ch chan interface{}) error {
 		err := handleMessage(queue)
 		if err != nil {
 			if _, ok := err.(*NoMessageError); ok {
-				log.Println("[error]", err)
 				break
 			} else {
 				return err
