@@ -3,7 +3,7 @@ DATE := $(shell date +%Y-%m-%dT%H:%M:%S%z)
 
 .PHONY: test local get-deps install clean
 
-cmd/rin/rin: config.go redshift.go rin.go event.go
+cmd/rin/rin: config.go redshift.go rin.go event.go cmd/rin/main.go
 	cd cmd/rin && go build -ldflags "-X main.version ${GIT_VER} -X main.buildDate ${DATE}"
 
 install: cmd/rin/rin

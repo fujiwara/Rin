@@ -1,11 +1,16 @@
 package rin_test
 
 import (
-	"log"
 	"testing"
 
 	rin "github.com/fujiwara/Rin"
 )
+
+var BrokenConfig = []string{
+	"test/config.yml.invalid_regexp",
+	"test/config.yml.no_key_matcher",
+	"test/config.yml.not_found",
+}
 
 var Excepted = [][]string{
 	[]string{
@@ -25,15 +30,25 @@ var Excepted = [][]string{
 	},
 }
 
+func TestLoadConfigError(t *testing.T) {
+	for _, f := range BrokenConfig {
+		_, err := rin.LoadConfig(f)
+		if err == nil {
+			t.Errorf("LoadConfig(%s) must be failed", f)
+		}
+		t.Log(err)
+	}
+}
+
 func TestLoadConfig(t *testing.T) {
 	config, err := rin.LoadConfig("test/config.yml")
-	for _, t := range config.Targets {
-		log.Println("target:", t)
-	}
-	log.Println("global.sql_option", config.SQLOption)
 	if err != nil {
-		t.Errorf("load config failed: %s", err)
+		t.Fatalf("load config failed: %s", err)
 	}
+	for _, target := range config.Targets {
+		t.Log("target:", target)
+	}
+	t.Log("global.sql_option", config.SQLOption)
 	if len(config.Targets) != 3 {
 		t.Error("invalid targets len", len(config.Targets))
 	}
@@ -52,6 +67,6 @@ func TestLoadConfig(t *testing.T) {
 		if sql != e[2] {
 			t.Errorf("unexpected SQL:\n%s\n%s", sql, e[2])
 		}
-		log.Println(sql)
+		t.Log(sql)
 	}
 }

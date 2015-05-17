@@ -65,7 +65,7 @@ func (t *Target) MatchEventRecord(r *EventRecord) (bool, *[]string) {
 	return t.Match(r.S3.Bucket.Name, r.S3.Object.Key)
 }
 
-func (t *Target) buildKeyMatcher() {
+func (t *Target) buildKeyMatcher() error {
 	if prefix := t.S3.KeyPrefix; prefix != "" {
 		t.keyMatcher = func(key string) (bool, *[]string) {
 			if strings.HasPrefix(key, prefix) {
@@ -75,18 +75,23 @@ func (t *Target) buildKeyMatcher() {
 				return false, nil
 			}
 		}
-	} else {
-		r := regexp.MustCompile(t.S3.KeyRegexp)
+	} else if r := t.S3.KeyRegexp; r != "" {
+		reg, err := regexp.Compile(r)
+		if err != nil {
+			return err
+		}
 		t.keyMatcher = func(key string) (bool, *[]string) {
-			cap := r.FindStringSubmatch(key)
+			cap := reg.FindStringSubmatch(key)
 			if len(cap) == 0 {
 				return false, nil
 			} else {
 				return true, &cap
 			}
 		}
+	} else {
+		return fmt.Errorf("target.key_prefix or key_regexp is not defined")
 	}
-	return
+	return nil
 }
 
 func expandPlaceHolder(s string, cap *[]string) string {
@@ -173,7 +178,10 @@ func LoadConfig(path string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	(&c).merge()
+	err = (&c).merge()
+	if err != nil {
+		return nil, err
+	}
 	return &c, (&c).validate()
 }
 
@@ -187,7 +195,7 @@ func (c *Config) validate() error {
 	return nil
 }
 
-func (c *Config) merge() {
+func (c *Config) merge() error {
 	cr := c.Redshift
 	cs := c.S3
 	for _, t := range c.Targets {
@@ -238,6 +246,10 @@ func (c *Config) merge() {
 				ts.KeyRegexp = cs.KeyRegexp
 			}
 		}
-		t.buildKeyMatcher()
+		err := t.buildKeyMatcher()
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }

@@ -3,6 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
+	"os"
 
 	rin "github.com/fujiwara/Rin"
 )
@@ -36,6 +38,7 @@ func main() {
 
 	err := rin.Run(config, batchMode)
 	if err != nil {
-		panic(err)
+		log.Println("[error]", err)
+		os.Exit(1)
 	}
 }
