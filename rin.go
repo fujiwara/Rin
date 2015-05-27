@@ -9,6 +9,7 @@ import (
 
 	"github.com/crowdmob/goamz/aws"
 	"github.com/crowdmob/goamz/sqs"
+	"errors"
 )
 
 var SQS *sqs.SQS
@@ -117,7 +118,7 @@ func sqsBatch(ch chan interface{}) error {
 		return err
 	}
 	for runnable(ch) {
-		err := handleMessage(queue)
+		err := handleMessages(queue)
 		if err != nil {
 			if _, ok := err.(*NoMessageError); ok {
 				break
@@ -155,7 +156,7 @@ func sqsWorker(ch chan interface{}) {
 
 func handleQueue(queue *sqs.Queue, ch chan interface{}) (bool, error) {
 	for runnable(ch) {
-		err := handleMessage(queue)
+		err := handleMessages(queue)
 		if err != nil {
 			if _, ok := err.(*NoMessageError); ok {
 				continue
@@ -167,26 +168,53 @@ func handleQueue(queue *sqs.Queue, ch chan interface{}) (bool, error) {
 	return true, nil
 }
 
-func handleMessage(queue *sqs.Queue) error {
-	var completed = false
-	res, err := queue.ReceiveMessage(1)
+func handleMessages(queue *sqs.Queue) error {
+	res, err := queue.ReceiveMessage(10)
 	if err != nil {
 		return err
 	}
+
 	if len(res.Messages) == 0 {
 		return &NoMessageError{"No messages"}
 	}
-	msg := res.Messages[0]
+
+	should_retry := false
+
+	for _, msg := range res.Messages {
+		err := handleMessage(queue, msg)
+
+		if err != nil {
+			log.Printf("[info] [%s] Aborted message.", msg.MessageId)
+			_, err = queue.ChangeMessageVisibility(&msg, 0)
+
+			if err != nil {
+				log.Printf("[error] [%s] Can't abort message. %s", msg.MessageId, err)
+			}
+
+			should_retry = true
+			continue
+		}
+
+		_, err = queue.DeleteMessage(&msg)
+
+		if err != nil {
+			log.Printf("[error] [%s] Can't delete message. %s", msg.MessageId, err)
+		}
+	}
+
+	if should_retry {
+		return errors.New("Failed to process some of message.")
+	}
+
+	return nil
+}
+
+func handleMessage(queue *sqs.Queue, msg sqs.Message) error {
 	log.Printf("[info] [%s] Starting process message.", msg.MessageId)
+	log.Printf("[info] [%s] ReceiptHandle: %s", msg.MessageId, msg.ReceiptHandle)
 	if Debug {
-		log.Printf("[degug] [%s] handle: %s", msg.MessageId, msg.ReceiptHandle)
 		log.Printf("[debug] [%s] body: %s", msg.MessageId, msg.Body)
 	}
-	defer func() {
-		if !completed {
-			log.Printf("[info] [%s] Aborted message.", msg.MessageId)
-		}
-	}()
 
 	event, err := ParseEvent([]byte(msg.Body))
 	if err != nil {
@@ -204,11 +232,6 @@ func handleMessage(queue *sqs.Queue) error {
 	} else {
 		log.Printf("[info] [%s] %d import action completed.", msg.MessageId, n)
 	}
-	_, err = queue.DeleteMessage(&msg)
-	if err != nil {
-		log.Printf("[error] [%s] Can't delete message. %s", msg.MessageId, err)
-	}
-	completed = true
 	log.Printf("[info] [%s] Completed message.", msg.MessageId)
 	return nil
 }
