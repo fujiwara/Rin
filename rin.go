@@ -181,7 +181,7 @@ func handleMessages(queue *sqs.Queue) error {
 	should_retry := false
 
 	for _, msg := range res.Messages {
-		err := handleMessage(queue, msg)
+		err := handleMessage(msg)
 
 		if err != nil {
 			log.Printf("[info] [%s] Aborted message.", msg.MessageId)
@@ -209,7 +209,7 @@ func handleMessages(queue *sqs.Queue) error {
 	return nil
 }
 
-func handleMessage(queue *sqs.Queue, msg sqs.Message) error {
+func handleMessage(msg sqs.Message) error {
 	log.Printf("[info] [%s] Starting process message.", msg.MessageId)
 	log.Printf("[info] [%s] ReceiptHandle: %s", msg.MessageId, msg.ReceiptHandle)
 	if Debug {
