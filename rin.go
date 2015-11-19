@@ -15,6 +15,7 @@ var SQS *sqs.SQS
 var config *Config
 var Debug bool
 var Runnable bool
+var MaxDeleteRetry = 8
 
 var TrapSignals = []os.Signal{
 	syscall.SIGHUP,
@@ -207,7 +208,20 @@ func handleMessage(queue *sqs.Queue) error {
 	_, err = queue.DeleteMessage(&msg)
 	if err != nil {
 		log.Printf("[error] [%s] Can't delete message. %s", msg.MessageId, err)
+		// retry
+		for i := 1; i <= MaxDeleteRetry; i++ {
+			log.Printf("[info] [%s] Retry to delete after %d sec.", msg.MessageId, i*i)
+			time.Sleep(time.Duration(i*i) * time.Second)
+			_, err := queue.DeleteMessage(&msg)
+			if err == nil {
+				log.Printf("[info] [%s] Message was deleted successfuly.", msg.MessageId)
+				break
+			}
+			log.Printf("[error] [%s] Can't delete message. %s", msg.MessageId, err)
+		}
+		log.Printf("[error] [%s] Max retry count reached. Giving up.", msg.MessageId)
 	}
+
 	completed = true
 	log.Printf("[info] [%s] Completed message.", msg.MessageId)
 	return nil
