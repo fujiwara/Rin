@@ -207,7 +207,7 @@ func handleMessage(queue *sqs.Queue) error {
 	}
 	_, err = queue.DeleteMessage(&msg)
 	if err != nil {
-		log.Printf("[error] [%s] Can't delete message. %s", msg.MessageId, err)
+		log.Printf("[warn] [%s] Can't delete message. %s", msg.MessageId, err)
 		// retry
 		for i := 1; i <= MaxDeleteRetry; i++ {
 			log.Printf("[info] [%s] Retry to delete after %d sec.", msg.MessageId, i*i)
@@ -217,7 +217,7 @@ func handleMessage(queue *sqs.Queue) error {
 				log.Printf("[info] [%s] Message was deleted successfuly.", msg.MessageId)
 				break
 			}
-			log.Printf("[error] [%s] Can't delete message. %s", msg.MessageId, err)
+			log.Printf("[warn] [%s] Can't delete message. %s", msg.MessageId, err)
 		}
 		log.Printf("[error] [%s] Max retry count reached. Giving up.", msg.MessageId)
 	}
