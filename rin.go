@@ -31,6 +31,31 @@ func (e *NoMessageError) Error() string {
 	return e.s
 }
 
+func getAuth(config *Config) (*aws.Auth, error) {
+	if config.Credentials.AWS_ACCESS_KEY_ID != "" && config.Credentials.AWS_SECRET_ACCESS_KEY != "" {
+		return &aws.Auth{
+			AccessKey: config.Credentials.AWS_ACCESS_KEY_ID,
+			SecretKey: config.Credentials.AWS_SECRET_ACCESS_KEY,
+		}, nil
+	}
+	// Otherwise, use IAM Role
+	cred, err := aws.GetInstanceCredentials()
+	if err != nil {
+		return nil, err
+	}
+	exptdate, err := time.Parse("2006-01-02T15:04:05Z", cred.Expiration)
+	if err != nil {
+		return nil, err
+	}
+	auth := aws.NewAuth(
+		cred.AccessKeyId,
+		cred.SecretAccessKey,
+		cred.Token,
+		exptdate,
+	)
+	return auth, nil
+}
+
 func Run(configFile string, batchMode bool) error {
 	Runnable = true
 	var err error
@@ -43,12 +68,12 @@ func Run(configFile string, batchMode bool) error {
 		log.Println("[info] Define target", target)
 	}
 
-	auth := aws.Auth{
-		AccessKey: config.Credentials.AWS_ACCESS_KEY_ID,
-		SecretKey: config.Credentials.AWS_SECRET_ACCESS_KEY,
+	auth, err := getAuth(config)
+	if err != nil {
+		return err
 	}
 	region := aws.GetRegion(config.Credentials.AWS_REGION)
-	SQS = sqs.New(auth, region)
+	SQS = sqs.New(*auth, region)
 
 	shutdownCh := make(chan interface{})
 	exitCh := make(chan int)
