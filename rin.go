@@ -56,6 +56,7 @@ func getAuth(config *Config) (*aws.Auth, error) {
 		}, nil
 	}
 	// Otherwise, use IAM Role
+	log.Println("[info] Get instance credentials...")
 	cred, err := aws.GetInstanceCredentials()
 	if err != nil {
 		return nil, err
@@ -70,7 +71,6 @@ func getAuth(config *Config) (*aws.Auth, error) {
 		cred.Token,
 		exptdate,
 	)
-	log.Println(auth)
 	return auth, nil
 }
 
@@ -83,13 +83,14 @@ func Run(configFile string, batchMode bool) error {
 		return err
 	}
 	for _, target := range config.Targets {
-		log.Println("[info] Define target", target)
+		log.Println("[info] Define target", target.String())
 	}
 
 	auth, err := getAuth(config)
 	if err != nil {
 		return err
 	}
+	log.Println("[info] access_key_id:", auth.AccessKey)
 	region := aws.GetRegion(config.Credentials.AWS_REGION)
 	SQS = sqs.New(*auth, region)
 
