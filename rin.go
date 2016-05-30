@@ -27,8 +27,23 @@ type NoMessageError struct {
 	s string
 }
 
-func (e *NoMessageError) Error() string {
+func (e NoMessageError) Error() string {
 	return e.s
+}
+
+type AuthExpiration struct {
+	s string
+}
+
+func (e AuthExpiration) Error() string {
+	return e.s
+}
+
+func (e AuthExpiration) String() string {
+	return e.s
+}
+
+func (e AuthExpiration) Signal() {
 }
 
 func getAuth(config *Config) (*aws.Auth, error) {
@@ -53,6 +68,7 @@ func getAuth(config *Config) (*aws.Auth, error) {
 		cred.Token,
 		exptdate,
 	)
+	log.Println(auth)
 	return auth, nil
 }
 
@@ -80,6 +96,13 @@ func Run(configFile string, batchMode bool) error {
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, TrapSignals...)
 
+	if !auth.Expiration().IsZero() {
+		e := auth.Expiration().Add(-3600 * time.Second) // before 1 hour
+		time.AfterFunc(e.Sub(time.Now()), func() {
+			signalCh <- AuthExpiration{"Auth will be expired in 1 hour"}
+		})
+	}
+
 	// run worker
 	if batchMode {
 		go func() {
@@ -95,12 +118,14 @@ func Run(configFile string, batchMode bool) error {
 	}
 
 	// wait for signal
-	var exitCode int
+	exitCode := 0
 	select {
 	case s := <-signalCh:
 		switch sig := s.(type) {
 		case syscall.Signal:
 			log.Printf("[info] Got signal: %s(%d)", sig, sig)
+		case AuthExpiration:
+			log.Printf("[info] %s", sig)
 		default:
 		}
 		log.Println("[info] Shutting down worker...")
@@ -144,7 +169,7 @@ func sqsBatch(ch chan interface{}) error {
 	for runnable(ch) {
 		err := handleMessage(queue)
 		if err != nil {
-			if _, ok := err.(*NoMessageError); ok {
+			if _, ok := err.(NoMessageError); ok {
 				break
 			} else {
 				return err
@@ -182,7 +207,7 @@ func handleQueue(queue *sqs.Queue, ch chan interface{}) (bool, error) {
 	for runnable(ch) {
 		err := handleMessage(queue)
 		if err != nil {
-			if _, ok := err.(*NoMessageError); ok {
+			if _, ok := err.(NoMessageError); ok {
 				continue
 			} else {
 				return false, err
@@ -199,7 +224,7 @@ func handleMessage(queue *sqs.Queue) error {
 		return err
 	}
 	if len(res.Messages) == 0 {
-		return &NoMessageError{"No messages"}
+		return NoMessageError{"No messages"}
 	}
 	msg := res.Messages[0]
 	log.Printf("[info] [%s] Starting process message.", msg.MessageId)
