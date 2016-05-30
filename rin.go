@@ -1,6 +1,7 @@
 package rin
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -15,6 +16,7 @@ var SQS *sqs.SQS
 var config *Config
 var Debug bool
 var Runnable bool
+var shutdownBeforeExpiration = 3600 * time.Second
 
 var TrapSignals = []os.Signal{
 	syscall.SIGHUP,
@@ -97,9 +99,12 @@ func Run(configFile string, batchMode bool) error {
 	signal.Notify(signalCh, TrapSignals...)
 
 	if !auth.Expiration().IsZero() {
-		e := auth.Expiration().Add(-3600 * time.Second) // before 1 hour
-		time.AfterFunc(e.Sub(time.Now()), func() {
-			signalCh <- AuthExpiration{"Auth will be expired in 1 hour"}
+		log.Println("[info] Auth will be expired on", auth.Expiration())
+		e := auth.Expiration().Add(-shutdownBeforeExpiration)
+		d := e.Sub(time.Now())
+		time.AfterFunc(d, func() {
+			msg := fmt.Sprintf("Auth will be expired in %s", shutdownBeforeExpiration)
+			signalCh <- AuthExpiration{msg}
 		})
 	}
 
@@ -114,11 +119,15 @@ func Run(configFile string, batchMode bool) error {
 			exitCh <- 0
 		}()
 	} else {
-		go sqsWorker(shutdownCh)
+		go func() {
+			sqsWorker(shutdownCh)
+			exitCh <- 0
+		}()
 	}
 
 	// wait for signal
-	exitCode := 0
+	var exitCode = 0
+	var exitErr error
 	select {
 	case s := <-signalCh:
 		switch sig := s.(type) {
@@ -126,16 +135,19 @@ func Run(configFile string, batchMode bool) error {
 			log.Printf("[info] Got signal: %s(%d)", sig, sig)
 		case AuthExpiration:
 			log.Printf("[info] %s", sig)
-		default:
+			exitErr = sig
 		}
 		log.Println("[info] Shutting down worker...")
-		close(shutdownCh) // notify shutdown to worker
+		close(shutdownCh)   // notify shutdown to worker
+		exitCode = <-exitCh // wait for shutdown worker
 	case exitCode = <-exitCh:
 	}
 
 	log.Println("[info] Shutdown.")
-	os.Exit(exitCode)
-	return nil
+	if exitCode != 0 {
+		os.Exit(exitCode)
+	}
+	return exitErr
 }
 
 func waitForRetry() {
