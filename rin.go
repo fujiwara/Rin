@@ -1,6 +1,7 @@
 package rin
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -15,6 +16,7 @@ var SQS *sqs.SQS
 var config *Config
 var Debug bool
 var Runnable bool
+var shutdownBeforeExpiration = 3600 * time.Second
 
 var TrapSignals = []os.Signal{
 	syscall.SIGHUP,
@@ -27,8 +29,49 @@ type NoMessageError struct {
 	s string
 }
 
-func (e *NoMessageError) Error() string {
+func (e NoMessageError) Error() string {
 	return e.s
+}
+
+type AuthExpiration struct {
+	s string
+}
+
+func (e AuthExpiration) Error() string {
+	return e.s
+}
+
+func (e AuthExpiration) String() string {
+	return e.s
+}
+
+func (e AuthExpiration) Signal() {
+}
+
+func getAuth(config *Config) (*aws.Auth, error) {
+	if config.Credentials.AWS_ACCESS_KEY_ID != "" && config.Credentials.AWS_SECRET_ACCESS_KEY != "" {
+		return &aws.Auth{
+			AccessKey: config.Credentials.AWS_ACCESS_KEY_ID,
+			SecretKey: config.Credentials.AWS_SECRET_ACCESS_KEY,
+		}, nil
+	}
+	// Otherwise, use IAM Role
+	log.Println("[info] Get instance credentials...")
+	cred, err := aws.GetInstanceCredentials()
+	if err != nil {
+		return nil, err
+	}
+	exptdate, err := time.Parse("2006-01-02T15:04:05Z", cred.Expiration)
+	if err != nil {
+		return nil, err
+	}
+	auth := aws.NewAuth(
+		cred.AccessKeyId,
+		cred.SecretAccessKey,
+		cred.Token,
+		exptdate,
+	)
+	return auth, nil
 }
 
 func Run(configFile string, batchMode bool) error {
@@ -40,20 +83,31 @@ func Run(configFile string, batchMode bool) error {
 		return err
 	}
 	for _, target := range config.Targets {
-		log.Println("[info] Define target", target)
+		log.Println("[info] Define target", target.String())
 	}
 
-	auth := aws.Auth{
-		AccessKey: config.Credentials.AWS_ACCESS_KEY_ID,
-		SecretKey: config.Credentials.AWS_SECRET_ACCESS_KEY,
+	auth, err := getAuth(config)
+	if err != nil {
+		return err
 	}
+	log.Println("[info] access_key_id:", auth.AccessKey)
 	region := aws.GetRegion(config.Credentials.AWS_REGION)
-	SQS = sqs.New(auth, region)
+	SQS = sqs.New(*auth, region)
 
 	shutdownCh := make(chan interface{})
 	exitCh := make(chan int)
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, TrapSignals...)
+
+	if !auth.Expiration().IsZero() {
+		log.Println("[info] Auth will be expired on", auth.Expiration())
+		e := auth.Expiration().Add(-shutdownBeforeExpiration)
+		d := e.Sub(time.Now())
+		time.AfterFunc(d, func() {
+			msg := fmt.Sprintf("Auth will be expired in %s", shutdownBeforeExpiration)
+			signalCh <- AuthExpiration{msg}
+		})
+	}
 
 	// run worker
 	if batchMode {
@@ -66,26 +120,35 @@ func Run(configFile string, batchMode bool) error {
 			exitCh <- 0
 		}()
 	} else {
-		go sqsWorker(shutdownCh)
+		go func() {
+			sqsWorker(shutdownCh)
+			exitCh <- 0
+		}()
 	}
 
 	// wait for signal
-	var exitCode int
+	var exitCode = 0
+	var exitErr error
 	select {
 	case s := <-signalCh:
 		switch sig := s.(type) {
 		case syscall.Signal:
 			log.Printf("[info] Got signal: %s(%d)", sig, sig)
-		default:
+		case AuthExpiration:
+			log.Printf("[info] %s", sig)
+			exitErr = sig
 		}
 		log.Println("[info] Shutting down worker...")
-		close(shutdownCh) // notify shutdown to worker
+		close(shutdownCh)   // notify shutdown to worker
+		exitCode = <-exitCh // wait for shutdown worker
 	case exitCode = <-exitCh:
 	}
 
 	log.Println("[info] Shutdown.")
-	os.Exit(exitCode)
-	return nil
+	if exitCode != 0 {
+		os.Exit(exitCode)
+	}
+	return exitErr
 }
 
 func waitForRetry() {
@@ -119,7 +182,7 @@ func sqsBatch(ch chan interface{}) error {
 	for runnable(ch) {
 		err := handleMessage(queue)
 		if err != nil {
-			if _, ok := err.(*NoMessageError); ok {
+			if _, ok := err.(NoMessageError); ok {
 				break
 			} else {
 				return err
@@ -157,7 +220,7 @@ func handleQueue(queue *sqs.Queue, ch chan interface{}) (bool, error) {
 	for runnable(ch) {
 		err := handleMessage(queue)
 		if err != nil {
-			if _, ok := err.(*NoMessageError); ok {
+			if _, ok := err.(NoMessageError); ok {
 				continue
 			} else {
 				return false, err
@@ -174,7 +237,7 @@ func handleMessage(queue *sqs.Queue) error {
 		return err
 	}
 	if len(res.Messages) == 0 {
-		return &NoMessageError{"No messages"}
+		return NoMessageError{"No messages"}
 	}
 	msg := res.Messages[0]
 	log.Printf("[info] [%s] Starting process message.", msg.MessageId)
