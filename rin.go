@@ -8,8 +8,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/crowdmob/goamz/aws"
-	"github.com/crowdmob/goamz/sqs"
+	"github.com/AdRoll/goamz/aws"
+	"github.com/AdRoll/goamz/sqs"
 )
 
 var SQS *sqs.SQS
