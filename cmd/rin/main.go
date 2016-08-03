@@ -36,9 +36,16 @@ func main() {
 		return
 	}
 
-	err := rin.Run(config, batchMode)
-	if err != nil {
-		log.Println("[error]", err)
-		os.Exit(1)
+	for {
+		err := rin.Run(config, batchMode)
+		if err == nil {
+			break
+		} else if _, ok := err.(rin.AuthExpiration); ok {
+			// restart
+			continue
+		} else {
+			log.Println("[error]", err)
+			os.Exit(1)
+		}
 	}
 }

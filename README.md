@@ -75,6 +75,8 @@ targets:
     sql_option: "CSV DELIMITER ',' ESCAPE"
 ```
 
+If `credentials.aws_access_key_id` and `credentials.aws_secret_access_key` are not specified, rin will try to get a instance credentials.
+
 ## Run
 
 
