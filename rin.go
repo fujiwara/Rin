@@ -209,17 +209,21 @@ func handleMessage(queue *sqs.Queue) error {
 	if err != nil {
 		log.Printf("[warn] [%s] Can't delete message. %s", msg.MessageId, err)
 		// retry
+		success := false
 		for i := 1; i <= MaxDeleteRetry; i++ {
 			log.Printf("[info] [%s] Retry to delete after %d sec.", msg.MessageId, i*i)
 			time.Sleep(time.Duration(i*i) * time.Second)
 			_, err := queue.DeleteMessage(&msg)
 			if err == nil {
 				log.Printf("[info] [%s] Message was deleted successfuly.", msg.MessageId)
+				success = true
 				break
 			}
 			log.Printf("[warn] [%s] Can't delete message. %s", msg.MessageId, err)
 		}
-		log.Printf("[error] [%s] Max retry count reached. Giving up.", msg.MessageId)
+		if !success {
+			log.Printf("[error] [%s] Max retry count reached. Giving up.", msg.MessageId)
+		}
 	}
 
 	completed = true
