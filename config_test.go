@@ -12,7 +12,7 @@ var BrokenConfig = []string{
 	"test/config.yml.not_found",
 }
 
-var Excepted = [][]string{
+var Expected = [][]string{
 	[]string{
 		"test.bucket.test",
 		"test/foo/xxx.json",
@@ -30,6 +30,24 @@ var Excepted = [][]string{
 	},
 }
 
+var ExpectedIAMRole = [][]string{
+	[]string{
+		"test.bucket.test",
+		"test/foo/xxx.json",
+		`/* Rin */ COPY "foo" FROM 's3://test.bucket.test/test/foo/xxx.json' CREDENTIALS 'aws_iam_role=arn:aws:iam::123456789012:role/rin' REGION 'ap-northeast-1' JSON 'auto' GZIP`,
+	},
+	[]string{
+		"test.bucket.test",
+		"test/bar/y's.csv",
+		`/* Rin */ COPY "xxx"."bar" FROM 's3://test.bucket.test/test/bar/y''s.csv' CREDENTIALS 'aws_iam_role=arn:aws:iam::123456789012:role/rin' REGION 'ap-northeast-1' CSV DELIMITER ',' ESCAPE`,
+	},
+	[]string{
+		"example.bucket",
+		"test/s1/t256/aaa.json",
+		`/* Rin */ COPY "s1"."t256" FROM 's3://example.bucket/test/s1/t256/aaa.json' CREDENTIALS 'aws_iam_role=arn:aws:iam::123456789012:role/rin' REGION 'ap-northeast-1' JSON 'auto' GZIP`,
+	},
+}
+
 func TestLoadConfigError(t *testing.T) {
 	for _, f := range BrokenConfig {
 		_, err := rin.LoadConfig(f)
@@ -41,7 +59,12 @@ func TestLoadConfigError(t *testing.T) {
 }
 
 func TestLoadConfig(t *testing.T) {
-	config, err := rin.LoadConfig("test/config.yml")
+	testConfig(t, "test/config.yml", Expected)
+	testConfig(t, "test/config.yml.iam_role", ExpectedIAMRole)
+}
+
+func testConfig(t *testing.T, name string, expected [][]string) {
+	config, err := rin.LoadConfig(name)
 	if err != nil {
 		t.Fatalf("load config failed: %s", err)
 	}
@@ -53,7 +76,7 @@ func TestLoadConfig(t *testing.T) {
 		t.Error("invalid targets len", len(config.Targets))
 	}
 	for i, target := range config.Targets {
-		e := Excepted[i]
+		e := expected[i]
 		bucket := e[0]
 		key := e[1]
 		ok, cap := target.Match(bucket, key)

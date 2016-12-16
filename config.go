@@ -13,9 +13,8 @@ import (
 )
 
 const (
-	S3URITemplate       = "s3://%s/%s"
-	CredentialsTemplate = "aws_access_key_id=%s;aws_secret_access_key=%s"
-	SQLTemplate         = "/* Rin */ COPY %s FROM %s CREDENTIALS '%s' REGION '%s' %s"
+	S3URITemplate = "s3://%s/%s"
+	SQLTemplate   = "/* Rin */ COPY %s FROM %s CREDENTIALS '%s' REGION '%s' %s"
 	// Prefix SQL comment "/* Rin */". Because a query which start with "COPY", pq expect a PostgreSQL COPY command response, but a Redshift response is different it.
 )
 
@@ -36,6 +35,15 @@ type Credentials struct {
 	AWS_ACCESS_KEY_ID     string `yaml:"aws_access_key_id"`
 	AWS_SECRET_ACCESS_KEY string `yaml:"aws_secret_access_key"`
 	AWS_REGION            string `yaml:"aws_region"`
+	AWS_IAM_ROLE          string `yaml:"aws_iam_role"`
+}
+
+func (c Credentials) RedshiftCredential() string {
+	if c.AWS_IAM_ROLE != "" {
+		return fmt.Sprintf("aws_iam_role=%s", c.AWS_IAM_ROLE)
+	} else {
+		return fmt.Sprintf("aws_access_key_id=%s;aws_secret_access_key=%s", c.AWS_ACCESS_KEY_ID, c.AWS_SECRET_ACCESS_KEY)
+	}
 }
 
 type Target struct {
@@ -114,7 +122,7 @@ func (t *Target) BuildCopySQL(key string, cred Credentials, cap *[]string) (stri
 		SQLTemplate,
 		table,
 		quoteValue(fmt.Sprintf(S3URITemplate, t.S3.Bucket, key)),
-		fmt.Sprintf(CredentialsTemplate, cred.AWS_ACCESS_KEY_ID, cred.AWS_SECRET_ACCESS_KEY),
+		cred.RedshiftCredential(),
 		t.S3.Region,
 		t.SQLOption,
 	)
