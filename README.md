@@ -75,10 +75,17 @@ targets:
     sql_option: "CSV DELIMITER ',' ESCAPE"
 ```
 
-If `credentials.aws_access_key_id` and `credentials.aws_secret_access_key` are not specified, rin will try to get a instance credentials.
+#### Credentials
+
+Rin requires credentials for SQS and Redshift.
+
+1. `credentials.aws_access_key_id` and `credentials.aws_secret_access_key`
+  - use for SQS and Redshift.
+2. `credentials.aws_iam_role`
+  - use for Redshift only.
+  - for SQS, Rin will try to get a instance credentials.
 
 ## Run
-
 
 ### daemon mode
 
