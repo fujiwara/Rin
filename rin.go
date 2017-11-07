@@ -254,7 +254,7 @@ func handleMessage(queue *sqs.Queue) error {
 
 	event, err := ParseEvent([]byte(msg.Body))
 	if err != nil {
-		log.Printf("[error] [%s] Can't parse event from Body.", msg.MessageId, err)
+		log.Printf("[error] [%s] Can't parse event from Body. %s", msg.MessageId, err)
 		return err
 	}
 	log.Printf("[info] [%s] Importing event: %s", msg.MessageId, event)
