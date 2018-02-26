@@ -77,8 +77,8 @@ func (t *Target) buildKeyMatcher() error {
 	if prefix := t.S3.KeyPrefix; prefix != "" {
 		t.keyMatcher = func(key string) (bool, *[]string) {
 			if strings.HasPrefix(key, prefix) {
-				cap := []string{key}
-				return true, &cap
+				capture := []string{key}
+				return true, &capture
 			} else {
 				return false, nil
 			}
@@ -89,11 +89,11 @@ func (t *Target) buildKeyMatcher() error {
 			return err
 		}
 		t.keyMatcher = func(key string) (bool, *[]string) {
-			cap := reg.FindStringSubmatch(key)
-			if len(cap) == 0 {
+			capture := reg.FindStringSubmatch(key)
+			if len(capture) == 0 {
 				return false, nil
 			} else {
-				return true, &cap
+				return true, &capture
 			}
 		}
 	} else {
@@ -102,20 +102,20 @@ func (t *Target) buildKeyMatcher() error {
 	return nil
 }
 
-func expandPlaceHolder(s string, cap *[]string) string {
-	for i, v := range *cap {
+func expandPlaceHolder(s string, capture *[]string) string {
+	for i, v := range *capture {
 		s = strings.Replace(s, "$"+strconv.Itoa(i), v, -1)
 	}
 	return s
 }
 
-func (t *Target) BuildCopySQL(key string, cred Credentials, cap *[]string) (string, error) {
+func (t *Target) BuildCopySQL(key string, cred Credentials, capture *[]string) (string, error) {
 	var table string
-	_table := expandPlaceHolder(t.Redshift.Table, cap)
+	_table := expandPlaceHolder(t.Redshift.Table, capture)
 	if t.Redshift.Schema == "" {
 		table = pq.QuoteIdentifier(_table)
 	} else {
-		_schema := expandPlaceHolder(t.Redshift.Schema, cap)
+		_schema := expandPlaceHolder(t.Redshift.Schema, capture)
 		table = pq.QuoteIdentifier(_schema) + "." + pq.QuoteIdentifier(_table)
 	}
 	query := fmt.Sprintf(
