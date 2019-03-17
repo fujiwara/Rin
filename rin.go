@@ -1,18 +1,17 @@
 package rin
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"github.com/AdRoll/goamz/aws"
-	"github.com/AdRoll/goamz/sqs"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/sqs"
 )
 
-var SQS *sqs.SQS
 var config *Config
 var Debug bool
 var Runnable bool
@@ -49,32 +48,6 @@ func (e AuthExpiration) String() string {
 func (e AuthExpiration) Signal() {
 }
 
-func getAuth(config *Config) (*aws.Auth, error) {
-	if config.Credentials.AWS_ACCESS_KEY_ID != "" && config.Credentials.AWS_SECRET_ACCESS_KEY != "" {
-		return &aws.Auth{
-			AccessKey: config.Credentials.AWS_ACCESS_KEY_ID,
-			SecretKey: config.Credentials.AWS_SECRET_ACCESS_KEY,
-		}, nil
-	}
-	// Otherwise, use IAM Role
-	log.Println("[info] Get instance credentials...")
-	cred, err := aws.GetInstanceCredentials()
-	if err != nil {
-		return nil, err
-	}
-	exptdate, err := time.Parse("2006-01-02T15:04:05Z", cred.Expiration)
-	if err != nil {
-		return nil, err
-	}
-	auth := aws.NewAuth(
-		cred.AccessKeyId,
-		cred.SecretAccessKey,
-		cred.Token,
-		exptdate,
-	)
-	return auth, nil
-}
-
 func Run(configFile string, batchMode bool) error {
 	Runnable = true
 	var err error
@@ -87,33 +60,18 @@ func Run(configFile string, batchMode bool) error {
 		log.Println("[info] Define target", target.String())
 	}
 
-	auth, err := getAuth(config)
-	if err != nil {
-		return err
-	}
-	log.Println("[info] access_key_id:", auth.AccessKey)
-	region := aws.GetRegion(config.Credentials.AWS_REGION)
-	SQS = sqs.New(*auth, region)
+	sess := session.Must(session.NewSession())
+	sqsSvc := sqs.New(sess, aws.NewConfig().WithRegion(config.Credentials.AWS_REGION))
 
 	shutdownCh := make(chan interface{})
 	exitCh := make(chan int)
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, TrapSignals...)
 
-	if !auth.Expiration().IsZero() {
-		log.Println("[info] Auth will be expired on", auth.Expiration())
-		e := auth.Expiration().Add(-shutdownBeforeExpiration)
-		d := e.Sub(time.Now())
-		time.AfterFunc(d, func() {
-			msg := fmt.Sprintf("Auth will be expired in %s", shutdownBeforeExpiration)
-			signalCh <- AuthExpiration{msg}
-		})
-	}
-
 	// run worker
 	if batchMode {
 		go func() {
-			err := sqsBatch(shutdownCh)
+			err := sqsBatch(shutdownCh, sqsSvc)
 			if err != nil {
 				log.Println("[error]", err)
 				exitCh <- 1
@@ -122,7 +80,7 @@ func Run(configFile string, batchMode bool) error {
 		}()
 	} else {
 		go func() {
-			sqsWorker(shutdownCh)
+			sqsWorker(shutdownCh, sqsSvc)
 			exitCh <- 0
 		}()
 	}
@@ -171,17 +129,19 @@ func runnable(ch chan interface{}) bool {
 	return true
 }
 
-func sqsBatch(ch chan interface{}) error {
+func sqsBatch(ch chan interface{}, svc *sqs.SQS) error {
 	log.Printf("[info] Starting up SQS Batch")
 	defer log.Println("[info] Shutdown SQS Batch")
 
 	log.Println("[info] Connect to SQS:", config.QueueName)
-	queue, err := SQS.GetQueue(config.QueueName)
+	res, err := svc.GetQueueUrl(&sqs.GetQueueUrlInput{
+		QueueName: aws.String(config.QueueName),
+	})
 	if err != nil {
 		return err
 	}
 	for runnable(ch) {
-		err := handleMessage(queue)
+		err := handleMessage(svc, res.QueueUrl)
 		if err != nil {
 			if _, ok := err.(NoMessageError); ok {
 				break
@@ -193,19 +153,21 @@ func sqsBatch(ch chan interface{}) error {
 	return nil
 }
 
-func sqsWorker(ch chan interface{}) {
+func sqsWorker(ch chan interface{}, svc *sqs.SQS) {
 	log.Printf("[info] Starting up SQS Worker")
 	defer log.Println("[info] Shutdown SQS Worker")
 
 	for runnable(ch) {
 		log.Println("[info] Connect to SQS:", config.QueueName)
-		queue, err := SQS.GetQueue(config.QueueName)
+		res, err := svc.GetQueueUrl(&sqs.GetQueueUrlInput{
+			QueueName: aws.String(config.QueueName),
+		})
 		if err != nil {
-			log.Println("[error] Can't get queue:", err)
+			log.Println("[error] GetQueueUrl failed:", err)
 			waitForRetry()
 			continue
 		}
-		quit, err := handleQueue(queue, ch)
+		quit, err := handleQueue(ch, svc, res.QueueUrl)
 		if err != nil {
 			log.Println("[error] Processing failed:", err)
 			waitForRetry()
@@ -217,9 +179,9 @@ func sqsWorker(ch chan interface{}) {
 	}
 }
 
-func handleQueue(queue *sqs.Queue, ch chan interface{}) (bool, error) {
+func handleQueue(ch chan interface{}, svc *sqs.SQS, queueUrl *string) (bool, error) {
 	for runnable(ch) {
-		err := handleMessage(queue)
+		err := handleMessage(svc, queueUrl)
 		if err != nil {
 			if _, ok := err.(NoMessageError); ok {
 				continue
@@ -231,9 +193,12 @@ func handleQueue(queue *sqs.Queue, ch chan interface{}) (bool, error) {
 	return true, nil
 }
 
-func handleMessage(queue *sqs.Queue) error {
+func handleMessage(svc *sqs.SQS, queueUrl *string) error {
 	var completed = false
-	res, err := queue.ReceiveMessage(1)
+	res, err := svc.ReceiveMessage(&sqs.ReceiveMessageInput{
+		MaxNumberOfMessages: aws.Int64(1),
+		QueueUrl:            queueUrl,
+	})
 	if err != nil {
 		return err
 	}
@@ -241,53 +206,60 @@ func handleMessage(queue *sqs.Queue) error {
 		return NoMessageError{"No messages"}
 	}
 	msg := res.Messages[0]
-	log.Printf("[info] [%s] Starting process message.", msg.MessageId)
+	msgId := *msg.MessageId
+	log.Printf("[info] [%s] Starting process message.", msgId)
 	if Debug {
-		log.Printf("[degug] [%s] handle: %s", msg.MessageId, msg.ReceiptHandle)
-		log.Printf("[debug] [%s] body: %s", msg.MessageId, msg.Body)
+		log.Printf("[degug] [%s] handle: %s", msgId, *msg.ReceiptHandle)
+		log.Printf("[debug] [%s] body: %s", msgId, *msg.Body)
 	}
 	defer func() {
 		if !completed {
-			log.Printf("[info] [%s] Aborted message. ReceiptHandle: %s", msg.MessageId, msg.ReceiptHandle)
+			log.Printf("[info] [%s] Aborted message. ReceiptHandle: %s", msgId, *msg.ReceiptHandle)
 		}
 	}()
 
-	event, err := ParseEvent([]byte(msg.Body))
+	event, err := ParseEvent([]byte(*msg.Body))
 	if err != nil {
-		log.Printf("[error] [%s] Can't parse event from Body. %s", msg.MessageId, err)
+		log.Printf("[error] [%s] Can't parse event from Body. %s", msgId, err)
 		return err
 	}
-	log.Printf("[info] [%s] Importing event: %s", msg.MessageId, event)
+	log.Printf("[info] [%s] Importing event: %s", msgId, event)
 	n, err := Import(event)
 	if err != nil {
-		log.Printf("[error] [%s] Import failed. %s", msg.MessageId, err)
+		log.Printf("[error] [%s] Import failed. %s", msgId, err)
 		return err
 	}
 	if n == 0 {
-		log.Printf("[warn] [%s] All events were not matched for any targets. Ignored.", msg.MessageId)
+		log.Printf("[warn] [%s] All events were not matched for any targets. Ignored.", msgId)
 	} else {
-		log.Printf("[info] [%s] %d import action completed.", msg.MessageId, n)
+		log.Printf("[info] [%s] %d import action completed.", msgId, n)
 	}
-	_, err = queue.DeleteMessage(&msg)
+	_, err = svc.DeleteMessage(&sqs.DeleteMessageInput{
+		QueueUrl:      queueUrl,
+		ReceiptHandle: msg.ReceiptHandle,
+	})
 	if err != nil {
-		log.Printf("[warn] [%s] Can't delete message. %s", msg.MessageId, err)
+		log.Printf("[warn] [%s] Can't delete message. %s", msgId, err)
 		// retry
 		for i := 1; i <= MaxDeleteRetry; i++ {
-			log.Printf("[info] [%s] Retry to delete after %d sec.", msg.MessageId, i*i)
+			log.Printf("[info] [%s] Retry to delete after %d sec.", msgId, i*i)
 			time.Sleep(time.Duration(i*i) * time.Second)
-			_, err := queue.DeleteMessage(&msg)
+			_, err = svc.DeleteMessage(&sqs.DeleteMessageInput{
+				QueueUrl:      queueUrl,
+				ReceiptHandle: msg.ReceiptHandle,
+			})
 			if err == nil {
-				log.Printf("[info] [%s] Message was deleted successfuly.", msg.MessageId)
+				log.Printf("[info] [%s] Message was deleted successfuly.", msgId)
 				break
 			}
-			log.Printf("[warn] [%s] Can't delete message. %s", msg.MessageId, err)
+			log.Printf("[warn] [%s] Can't delete message. %s", msgId, err)
 			if i == MaxDeleteRetry {
-				log.Printf("[error] [%s] Max retry count reached. Giving up.", msg.MessageId)
+				log.Printf("[error] [%s] Max retry count reached. Giving up.", msgId)
 			}
 		}
 	}
 
 	completed = true
-	log.Printf("[info] [%s] Completed message.", msg.MessageId)
+	log.Printf("[info] [%s] Completed message.", msgId)
 	return nil
 }
