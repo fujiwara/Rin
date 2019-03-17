@@ -1,5 +1,6 @@
 GIT_VER := $(shell git describe --tags)
 DATE := $(shell date +%Y-%m-%dT%H:%M:%S%z)
+export GO111MODULE := on
 
 .PHONY: test local get-deps install clean
 
