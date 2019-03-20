@@ -3,11 +3,16 @@ package rin
 import (
 	"fmt"
 	"io/ioutil"
+	"log"
+	"net/http"
 	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/lib/pq"
 	"gopkg.in/yaml.v1"
 )
@@ -176,8 +181,51 @@ func (r Redshift) String() string {
 	}
 }
 
+func loadSrcFrom(path string) ([]byte, error) {
+	u, err := url.Parse(path)
+	if err != nil {
+		// not a URL. load as a file path
+		return ioutil.ReadFile(path)
+	}
+	switch u.Scheme {
+	case "http", "https":
+		return fetchHTTP(u)
+	case "s3":
+		return fetchS3(u)
+	case "file", "":
+		return ioutil.ReadFile(u.Path)
+	default:
+		return nil, fmt.Errorf("scheme %s is not supported", u.Scheme)
+	}
+}
+
+func fetchHTTP(u *url.URL) ([]byte, error) {
+	log.Println("[info] fetching HTTP", u)
+	resp, err := http.Get(u.String())
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return ioutil.ReadAll(resp.Body)
+}
+
+func fetchS3(u *url.URL) ([]byte, error) {
+	log.Println("[info] fetching S3", u)
+	downloader := s3manager.NewDownloader(Session)
+
+	buf := &aws.WriteAtBuffer{}
+	_, err := downloader.Download(buf, &s3.GetObjectInput{
+		Bucket: aws.String(u.Host),
+		Key:    aws.String(u.Path),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch from S3, %s", err)
+	}
+	return buf.Bytes(), nil
+}
+
 func LoadConfig(path string) (*Config, error) {
-	src, err := ioutil.ReadFile(path)
+	src, err := loadSrcFrom(path)
 	if err != nil {
 		return nil, err
 	}
