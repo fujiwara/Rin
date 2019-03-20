@@ -17,6 +17,7 @@ var Debug bool
 var Runnable bool
 var MaxDeleteRetry = 8
 var shutdownBeforeExpiration = 3600 * time.Second
+var Session *session.Session
 
 var TrapSignals = []os.Signal{
 	syscall.SIGHUP,
@@ -60,8 +61,10 @@ func Run(configFile string, batchMode bool) error {
 		log.Println("[info] Define target", target.String())
 	}
 
-	sess := session.Must(session.NewSession())
-	sqsSvc := sqs.New(sess, aws.NewConfig().WithRegion(config.Credentials.AWS_REGION))
+	if Session == nil {
+		Session = session.Must(session.NewSession())
+	}
+	sqsSvc := sqs.New(Session, aws.NewConfig().WithRegion(config.Credentials.AWS_REGION))
 
 	shutdownCh := make(chan interface{})
 	exitCh := make(chan int)
