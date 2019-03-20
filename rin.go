@@ -15,8 +15,6 @@ import (
 )
 
 var config *Config
-var Debug bool
-var Runnable bool
 var MaxDeleteRetry = 8
 var Sessions *SessionStore
 
@@ -46,7 +44,6 @@ func Run(configFile string, batchMode bool) error {
 }
 
 func RunWithContext(ctx context.Context, configFile string, batchMode bool) error {
-	Runnable = true
 	var err error
 	log.Println("[info] Loading config:", configFile)
 	config, err = LoadConfig(configFile)
@@ -156,10 +153,9 @@ func handleMessage(ctx context.Context, svc *sqs.SQS, queueUrl *string) error {
 	msg := res.Messages[0]
 	msgId := *msg.MessageId
 	log.Printf("[info] [%s] Starting process message.", msgId)
-	if Debug {
-		log.Printf("[degug] [%s] handle: %s", msgId, *msg.ReceiptHandle)
-		log.Printf("[debug] [%s] body: %s", msgId, *msg.Body)
-	}
+	log.Printf("[degug] [%s] handle: %s", msgId, *msg.ReceiptHandle)
+	log.Printf("[debug] [%s] body: %s", msgId, *msg.Body)
+
 	defer func() {
 		if !completed {
 			log.Printf("[info] [%s] Aborted message. ReceiptHandle: %s", msgId, *msg.ReceiptHandle)

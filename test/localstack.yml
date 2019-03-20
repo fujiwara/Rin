@@ -14,6 +14,7 @@ redshift:
   port: 4577
   dbname: test
   user: root
+  password: toor
 
 targets:
   - redshift:

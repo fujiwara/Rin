@@ -7,6 +7,7 @@ import (
 	"os"
 
 	rin "github.com/fujiwara/Rin"
+	"github.com/hashicorp/logutils"
 )
 
 var (
@@ -19,11 +20,12 @@ func main() {
 		config      string
 		showVersion bool
 		batchMode   bool
+		debug       bool
 	)
 	flag.StringVar(&config, "config", "config.yaml", "config file path")
 	flag.StringVar(&config, "c", "config.yaml", "config file path")
-	flag.BoolVar(&rin.Debug, "debug", false, "enable debug logging")
-	flag.BoolVar(&rin.Debug, "d", false, "enable debug logging")
+	flag.BoolVar(&debug, "debug", false, "enable debug logging")
+	flag.BoolVar(&debug, "d", false, "enable debug logging")
 	flag.BoolVar(&showVersion, "version", false, "show version")
 	flag.BoolVar(&showVersion, "v", false, "show version")
 	flag.BoolVar(&batchMode, "batch", false, "batch mode")
@@ -35,6 +37,17 @@ func main() {
 		fmt.Println("build:", buildDate)
 		return
 	}
+
+	minLevel := "info"
+	if debug {
+		minLevel = "debug"
+	}
+	filter := &logutils.LevelFilter{
+		Levels:   []logutils.LogLevel{"debug", "info", "warn", "error"},
+		MinLevel: logutils.LogLevel(minLevel),
+		Writer:   os.Stderr,
+	}
+	log.SetOutput(filter)
 
 	if err := rin.Run(config, batchMode); err != nil {
 		log.Println("[error]", err)

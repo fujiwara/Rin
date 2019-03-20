@@ -10,7 +10,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/redshift"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/sqs"
 
@@ -52,11 +51,6 @@ var sessions = &rin.SessionStore{
 		Region:           aws.String(endpoints.ApNortheast1RegionID),
 		Endpoint:         aws.String(S3Endpoint),
 	})),
-	Redshift: session.Must(session.NewSession(&aws.Config{
-		Credentials: credentials.NewStaticCredentials("foo", "var", ""),
-		Region:      aws.String(endpoints.ApNortheast1RegionID),
-		Endpoint:    aws.String(RedshiftEndpoint),
-	})),
 }
 
 func TestLocalStack(t *testing.T) {
@@ -69,11 +63,7 @@ func TestLocalStack(t *testing.T) {
 	d2 := setupS3(t)
 	defer d2()
 
-	d3 := setupRedshift(t)
-	defer d3()
-
 	rin.Sessions = sessions
-	rin.Debug = true
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
@@ -139,27 +129,6 @@ func setupSQS(t *testing.T) func() {
 	return func() {
 		svc.DeleteQueue(&sqs.DeleteQueueInput{
 			QueueUrl: r.QueueUrl,
-		})
-	}
-}
-
-func setupRedshift(t *testing.T) func() {
-	svc := redshift.New(sessions.Redshift)
-
-	id := aws.String("localhost")
-	_, err := svc.CreateCluster(&redshift.CreateClusterInput{
-		ClusterIdentifier:  id,
-		MasterUsername:     aws.String("root"),
-		MasterUserPassword: aws.String("toor"),
-		NodeType:           aws.String("dc2.large"),
-		ClusterType:        aws.String("single-node"),
-	})
-	if err != nil {
-		//		t.Error(err)
-	}
-	return func() {
-		svc.DeleteCluster(&redshift.DeleteClusterInput{
-			ClusterIdentifier: id,
 		})
 	}
 }

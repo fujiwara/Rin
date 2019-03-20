@@ -92,9 +92,8 @@ func ImportRedshift(target *Target, record *EventRecord, cap *[]string) error {
 	if err != nil {
 		return err
 	}
-	if Debug {
-		log.Println("[debug] SQL:", query)
-	}
+	log.Println("[debug] SQL:", query)
+
 	stmt, err := txn.Prepare(query)
 	if err != nil {
 		return err
