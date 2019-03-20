@@ -1,9 +1,11 @@
 package rin
 
 import (
+	"context"
 	"log"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -16,7 +18,6 @@ var config *Config
 var Debug bool
 var Runnable bool
 var MaxDeleteRetry = 8
-var shutdownBeforeExpiration = 3600 * time.Second
 var Session *session.Session
 
 var TrapSignals = []os.Signal{
@@ -34,22 +35,11 @@ func (e NoMessageError) Error() string {
 	return e.s
 }
 
-type AuthExpiration struct {
-	s string
-}
-
-func (e AuthExpiration) Error() string {
-	return e.s
-}
-
-func (e AuthExpiration) String() string {
-	return e.s
-}
-
-func (e AuthExpiration) Signal() {
-}
-
 func Run(configFile string, batchMode bool) error {
+	return RunWithContext(context.Background(), configFile, batchMode)
+}
+
+func RunWithContext(ctx context.Context, configFile string, batchMode bool) error {
 	Runnable = true
 	var err error
 	log.Println("[info] Loading config:", configFile)
@@ -66,51 +56,32 @@ func Run(configFile string, batchMode bool) error {
 	}
 	sqsSvc := sqs.New(Session, aws.NewConfig().WithRegion(config.Credentials.AWS_REGION))
 
-	shutdownCh := make(chan interface{})
-	exitCh := make(chan int)
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, TrapSignals...)
-
-	// run worker
-	if batchMode {
-		go func() {
-			err := sqsBatch(shutdownCh, sqsSvc)
-			if err != nil {
-				log.Println("[error]", err)
-				exitCh <- 1
-			}
-			exitCh <- 0
-		}()
-	} else {
-		go func() {
-			sqsWorker(shutdownCh, sqsSvc)
-			exitCh <- 0
-		}()
-	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var wg sync.WaitGroup
+	wg.Add(1)
 
 	// wait for signal
-	var exitCode = 0
-	var exitErr error
-	select {
-	case s := <-signalCh:
-		switch sig := s.(type) {
-		case syscall.Signal:
-			log.Printf("[info] Got signal: %s(%d)", sig, sig)
-		case AuthExpiration:
-			log.Printf("[info] %s", sig)
-			exitErr = sig
-		}
+	go func() {
+		defer wg.Done()
+		sig := <-signalCh
+		log.Printf("[info] Got signal: %s(%d)", sig, sig)
 		log.Println("[info] Shutting down worker...")
-		close(shutdownCh)   // notify shutdown to worker
-		exitCode = <-exitCh // wait for shutdown worker
-	case exitCode = <-exitCh:
-	}
+		cancel()
+	}()
 
+	// run worker
+	err = sqsWorker(ctx, &wg, sqsSvc, batchMode)
+
+	wg.Wait()
 	log.Println("[info] Shutdown.")
-	if exitCode != 0 {
-		os.Exit(exitCode)
+	if ctx.Err() == context.Canceled {
+		// normally exit
+		return nil
 	}
-	return exitErr
+	return err
 }
 
 func waitForRetry() {
@@ -118,87 +89,52 @@ func waitForRetry() {
 	time.Sleep(10 * time.Second)
 }
 
-func runnable(ch chan interface{}) bool {
-	if !Runnable {
-		return false
+func sqsWorker(ctx context.Context, wg *sync.WaitGroup, svc *sqs.SQS, batchMode bool) error {
+	var mode string
+	if batchMode {
+		mode = "Batch"
+	} else {
+		mode = "Worker"
 	}
-	select {
-	case <-ch:
-		// ch closed == shutdown
-		Runnable = false
-		return false
-	default:
-	}
-	return true
-}
-
-func sqsBatch(ch chan interface{}, svc *sqs.SQS) error {
-	log.Printf("[info] Starting up SQS Batch")
-	defer log.Println("[info] Shutdown SQS Batch")
+	log.Printf("[info] Starting up SQS %s", mode)
+	defer log.Printf("[info] Shutdown SQS %s", mode)
+	defer wg.Done()
 
 	log.Println("[info] Connect to SQS:", config.QueueName)
-	res, err := svc.GetQueueUrl(&sqs.GetQueueUrlInput{
+	res, err := svc.GetQueueUrlWithContext(ctx, &sqs.GetQueueUrlInput{
 		QueueName: aws.String(config.QueueName),
 	})
 	if err != nil {
 		return err
 	}
-	for runnable(ch) {
-		err := handleMessage(svc, res.QueueUrl)
-		if err != nil {
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+		}
+		if err := handleMessage(ctx, svc, res.QueueUrl); err != nil {
 			if _, ok := err.(NoMessageError); ok {
-				break
-			} else {
-				return err
+				if batchMode {
+					break
+				} else {
+					continue
+				}
+				if ctx.Err() == context.Canceled {
+					return nil
+				}
+				if !batchMode {
+					waitForRetry()
+				}
 			}
 		}
 	}
 	return nil
 }
 
-func sqsWorker(ch chan interface{}, svc *sqs.SQS) {
-	log.Printf("[info] Starting up SQS Worker")
-	defer log.Println("[info] Shutdown SQS Worker")
-
-	for runnable(ch) {
-		log.Println("[info] Connect to SQS:", config.QueueName)
-		res, err := svc.GetQueueUrl(&sqs.GetQueueUrlInput{
-			QueueName: aws.String(config.QueueName),
-		})
-		if err != nil {
-			log.Println("[error] GetQueueUrl failed:", err)
-			waitForRetry()
-			continue
-		}
-		quit, err := handleQueue(ch, svc, res.QueueUrl)
-		if err != nil {
-			log.Println("[error] Processing failed:", err)
-			waitForRetry()
-			continue
-		}
-		if quit {
-			break
-		}
-	}
-}
-
-func handleQueue(ch chan interface{}, svc *sqs.SQS, queueUrl *string) (bool, error) {
-	for runnable(ch) {
-		err := handleMessage(svc, queueUrl)
-		if err != nil {
-			if _, ok := err.(NoMessageError); ok {
-				continue
-			} else {
-				return false, err
-			}
-		}
-	}
-	return true, nil
-}
-
-func handleMessage(svc *sqs.SQS, queueUrl *string) error {
+func handleMessage(ctx context.Context, svc *sqs.SQS, queueUrl *string) error {
 	var completed = false
-	res, err := svc.ReceiveMessage(&sqs.ReceiveMessageInput{
+	res, err := svc.ReceiveMessageWithContext(ctx, &sqs.ReceiveMessageInput{
 		MaxNumberOfMessages: aws.Int64(1),
 		QueueUrl:            queueUrl,
 	})

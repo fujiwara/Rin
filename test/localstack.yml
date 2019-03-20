@@ -1,0 +1,37 @@
+queue_name: rin_test
+
+credentials:
+  aws_region: ap-northeast-1
+
+s3:
+  bucket: test.bucket.test
+  region: ap-northeast-1
+
+sql_option: "JSON 'auto' GZIP"
+
+redshift:
+  host: localhost
+  port: 4577
+  dbname: test
+  user: test_user
+  password: test_pass
+
+targets:
+  - redshift:
+      table: foo
+    s3:
+      key_prefix: test/foo
+
+  - redshift:
+      schema: xxx
+      table: bar
+    s3:
+      key_prefix: test/bar
+    sql_option: "CSV DELIMITER ',' ESCAPE"
+
+  - redshift:
+      schema: $1
+      table: $2
+    s3:
+      bucket: example.bucket
+      key_regexp: test/(s[0-9]+)/(t[0-9]+)/
