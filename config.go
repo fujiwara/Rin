@@ -166,6 +166,13 @@ func (r Redshift) DSN() string {
 	)
 }
 
+func (r Redshift) DSNWithPassword(pass string) string {
+	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s",
+		url.QueryEscape(r.User), url.QueryEscape(pass),
+		url.QueryEscape(r.Host), r.Port, url.QueryEscape(r.DBName),
+	)
+}
+
 func (r Redshift) VisibleDSN() string {
 	return fmt.Sprintf("redshift://%s:****@%s:%d/%s",
 		url.QueryEscape(r.User),
@@ -200,7 +207,7 @@ func loadSrcFrom(path string) ([]byte, error) {
 }
 
 func fetchHTTP(u *url.URL) ([]byte, error) {
-	log.Println("[info] fetching HTTP", u)
+	log.Println("[info] fetching from", u)
 	resp, err := http.Get(u.String())
 	if err != nil {
 		return nil, err
@@ -210,8 +217,8 @@ func fetchHTTP(u *url.URL) ([]byte, error) {
 }
 
 func fetchS3(u *url.URL) ([]byte, error) {
-	log.Println("[info] fetching S3", u)
-	downloader := s3manager.NewDownloader(Session)
+	log.Println("[info] fetching from", u)
+	downloader := s3manager.NewDownloader(Sessions.S3)
 
 	buf := &aws.WriteAtBuffer{}
 	_, err := downloader.Download(buf, &s3.GetObjectInput{

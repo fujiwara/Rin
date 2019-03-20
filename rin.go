@@ -18,7 +18,13 @@ var config *Config
 var Debug bool
 var Runnable bool
 var MaxDeleteRetry = 8
-var Session *session.Session
+var Sessions *SessionStore
+
+type SessionStore struct {
+	SQS      *session.Session
+	Redshift *session.Session
+	S3       *session.Session
+}
 
 var TrapSignals = []os.Signal{
 	syscall.SIGHUP,
@@ -51,10 +57,13 @@ func RunWithContext(ctx context.Context, configFile string, batchMode bool) erro
 		log.Println("[info] Define target", target.String())
 	}
 
-	if Session == nil {
-		Session = session.Must(session.NewSession())
+	if Sessions == nil {
+		sess := session.Must(session.NewSession())
+		Sessions.SQS = sess
+		Sessions.Redshift = sess
+		Sessions.S3 = sess
 	}
-	sqsSvc := sqs.New(Session, aws.NewConfig().WithRegion(config.Credentials.AWS_REGION))
+	sqsSvc := sqs.New(Sessions.SQS, aws.NewConfig().WithRegion(config.Credentials.AWS_REGION))
 
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, TrapSignals...)
