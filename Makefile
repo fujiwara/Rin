@@ -1,5 +1,6 @@
 GIT_VER := $(shell git describe --tags)
 DATE := $(shell date +%Y-%m-%dT%H:%M:%S%z)
+export GO111MODULE := on
 
 .PHONY: test local get-deps install clean
 
@@ -9,17 +10,16 @@ cmd/rin/rin: config.go redshift.go rin.go event.go cmd/rin/main.go
 install: cmd/rin/rin
 	install cmd/rin/rin ${GOPATH}/bin
 
-test:
-	go test
+test-localstack:
+	docker-compose up -d
+	TEST_LOCALSTACK=on dockerize -timeout 30s -wait tcp://localhost:4576 go test -v -run Local ./...
 
-get-deps:
-	go get -t -d -v .
-	cd cmd/rin && go get -t -d -v .
+test:
+	go test -v ./...
 
 packages: config.go redshift.go rin.go event.go
 	cd cmd/rin && gox -os="linux darwin" -arch="amd64" -output "../../pkg/{{.Dir}}-${GIT_VER}-{{.OS}}-{{.Arch}}" -ldflags "-X main.version=${GIT_VER} -X main.buildDate=${DATE}"
 	cd pkg && find . -name "*${GIT_VER}*" -type f -exec zip {}.zip {} \;
 
 clean:
-	rm -f cmd/rin/rin
-	rm -f pkg/*
+	rm -f cmd/rin/rin pkg/* test/ls_tmp/*
