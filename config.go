@@ -14,7 +14,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/lib/pq"
-	"gopkg.in/yaml.v1"
+
+	goconfig "github.com/kayac/go-config"
 )
 
 const (
@@ -237,7 +238,7 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, err
 	}
 	var c Config
-	err = yaml.Unmarshal(src, &c)
+	err = goconfig.LoadWithEnvBytes(&c, src)
 	if err != nil {
 		return nil, err
 	}

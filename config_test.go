@@ -1,6 +1,7 @@
 package rin_test
 
 import (
+	"os"
 	"testing"
 
 	rin "github.com/fujiwara/Rin"
@@ -59,6 +60,7 @@ func TestLoadConfigError(t *testing.T) {
 }
 
 func TestLoadConfig(t *testing.T) {
+	os.Setenv("AWS_SECRET_ACCESS_KEY", "SSS")
 	testConfig(t, "test/config.yml", Expected)
 	testConfig(t, "test/config.yml.iam_role", ExpectedIAMRole)
 }
