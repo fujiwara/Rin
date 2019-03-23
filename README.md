@@ -23,8 +23,6 @@ Rin is a Redshift data Importer by SQS messaging.
 queue_name: my_queue_name    # SQS queue name
 
 credentials:
-  aws_access_key_id: AAA
-  aws_secret_access_key: SSS
   aws_region: ap-northeast-1
 
 redshift:
@@ -32,7 +30,7 @@ redshift:
   port: 5439
   dbname: test
   user: test_user
-  password: test_pass
+  password: '{{ must_env "REDSHIFT_PASSWORD" }}'
   schema: public
 
 s3:
@@ -75,14 +73,20 @@ targets:
     sql_option: "CSV DELIMITER ',' ESCAPE"
 ```
 
+A configuration file is parsed by [kayac/go-config](https://github.com/kayac/go-config).
+
+go-config expands environment variables using syntax `{{ env "FOO" }}` or `{{ must_env "FOO" }}` in a configuration file.
+
+When the password for Redshift is empty, Rin will try call [GetClusterCredentials API](https://docs.aws.amazon.com/redshift/latest/APIReference/API_GetClusterCredentials.html) to get a temporary password for the cluster.
+
 #### Credentials
 
 Rin requires credentials for SQS and Redshift.
 
 1. `credentials.aws_access_key_id` and `credentials.aws_secret_access_key`
-  - use for SQS and Redshift.
+  - used for SQS and Redshift.
 2. `credentials.aws_iam_role`
-  - use for Redshift only.
+  - used for Redshift only.
   - for SQS, Rin will try to get a instance credentials.
 
 ## Run
@@ -93,6 +97,13 @@ Rin waits new SQS messages and processing it continually.
 
 ```
 $ rin -config config.yaml [-debug]
+```
+
+`-config` also accepts HTTP/S3/File URL to specify the location of configuration file.
+For example,
+
+```
+$ rin -config s3://rin-config.my-bucket/config.yaml
 ```
 
 ### batch mode
