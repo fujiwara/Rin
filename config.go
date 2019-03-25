@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/lib/pq"
@@ -219,7 +220,11 @@ func fetchHTTP(u *url.URL) ([]byte, error) {
 
 func fetchS3(u *url.URL) ([]byte, error) {
 	log.Println("[info] fetching from", u)
-	downloader := s3manager.NewDownloader(Sessions.S3)
+	sess := Sessions.S3
+	if sess == nil {
+		sess = session.Must(session.NewSession())
+	}
+	downloader := s3manager.NewDownloader(sess)
 
 	buf := &aws.WriteAtBuffer{}
 	_, err := downloader.Download(buf, &s3.GetObjectInput{
