@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
 )
@@ -55,12 +56,22 @@ func RunWithContext(ctx context.Context, configFile string, batchMode bool) erro
 	}
 
 	if Sessions == nil {
-		sess := session.Must(session.NewSession())
+		c := &aws.Config{
+			Region: aws.String(config.Credentials.AWS_REGION),
+		}
+		if config.Credentials.AWS_ACCESS_KEY_ID != "" {
+			c.Credentials = credentials.NewStaticCredentials(
+				config.Credentials.AWS_ACCESS_KEY_ID,
+				config.Credentials.AWS_SECRET_ACCESS_KEY,
+				"",
+			)
+		}
+		sess := session.Must(session.NewSession(c))
 		Sessions.SQS = sess
 		Sessions.Redshift = sess
 		Sessions.S3 = sess
 	}
-	sqsSvc := sqs.New(Sessions.SQS, aws.NewConfig().WithRegion(config.Credentials.AWS_REGION))
+	sqsSvc := sqs.New(Sessions.SQS)
 
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, TrapSignals...)
