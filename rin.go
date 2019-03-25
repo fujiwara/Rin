@@ -164,7 +164,7 @@ func handleMessage(ctx context.Context, svc *sqs.SQS, queueUrl *string) error {
 	msg := res.Messages[0]
 	msgId := *msg.MessageId
 	log.Printf("[info] [%s] Starting process message.", msgId)
-	log.Printf("[degug] [%s] handle: %s", msgId, *msg.ReceiptHandle)
+	log.Printf("[debug] [%s] handle: %s", msgId, *msg.ReceiptHandle)
 	log.Printf("[debug] [%s] body: %s", msgId, *msg.Body)
 
 	defer func() {
