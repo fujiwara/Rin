@@ -48,6 +48,7 @@ func main() {
 		Writer:   os.Stderr,
 	}
 	log.SetOutput(filter)
+	log.Println("[info] rin version:", version)
 
 	if err := rin.Run(config, batchMode); err != nil {
 		log.Println("[error]", err)
