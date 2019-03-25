@@ -17,7 +17,7 @@ import (
 
 var config *Config
 var MaxDeleteRetry = 8
-var Sessions *SessionStore
+var Sessions = &SessionStore{}
 
 type SessionStore struct {
 	SQS      *session.Session
@@ -55,7 +55,7 @@ func RunWithContext(ctx context.Context, configFile string, batchMode bool) erro
 		log.Println("[info] Define target", target.String())
 	}
 
-	if Sessions == nil {
+	if Sessions.SQS == nil {
 		c := &aws.Config{
 			Region: aws.String(config.Credentials.AWS_REGION),
 		}
@@ -78,7 +78,7 @@ func RunWithContext(ctx context.Context, configFile string, batchMode bool) erro
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var wg sync.WaitGroup
-	wg.Add(1)
+	wg.Add(2) // signal handler + sqsWorker
 
 	// wait for signal
 	go func() {
@@ -164,7 +164,7 @@ func handleMessage(ctx context.Context, svc *sqs.SQS, queueUrl *string) error {
 	msg := res.Messages[0]
 	msgId := *msg.MessageId
 	log.Printf("[info] [%s] Starting process message.", msgId)
-	log.Printf("[degug] [%s] handle: %s", msgId, *msg.ReceiptHandle)
+	log.Printf("[debug] [%s] handle: %s", msgId, *msg.ReceiptHandle)
 	log.Printf("[debug] [%s] body: %s", msgId, *msg.Body)
 
 	defer func() {
