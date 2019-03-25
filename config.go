@@ -168,9 +168,9 @@ func (r Redshift) DSN() string {
 	)
 }
 
-func (r Redshift) DSNWithPassword(pass string) string {
+func (r Redshift) DSNWith(user, password string) string {
 	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s",
-		url.QueryEscape(r.User), url.QueryEscape(pass),
+		url.QueryEscape(user), url.QueryEscape(password),
 		url.QueryEscape(r.Host), r.Port, url.QueryEscape(r.DBName),
 	)
 }
