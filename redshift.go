@@ -50,7 +50,7 @@ func ConnectToRedshift(target *Target) (*sql.DB, error) {
 	}
 	log.Println("Connect to Redshift", dsn)
 
-	var password = r.Password
+	var user, password = r.User, r.Password
 	if password == "" {
 		if redshiftSvc == nil {
 			redshiftSvc = redshift.New(Sessions.Redshift)
@@ -64,11 +64,11 @@ func ConnectToRedshift(target *Target) (*sql.DB, error) {
 		if err != nil {
 			return nil, err
 		}
-		password = *res.DbPassword
-		log.Printf("[debug] Got temp password %s", password)
+		user, password = *res.DbUser, *res.DbPassword
+		log.Printf("[debug] Got user %s password %s", user, password)
 	}
 
-	db, err := sql.Open("postgres", r.DSNWithPassword(password))
+	db, err := sql.Open("postgres", r.DSNWith(user, password))
 	if err != nil {
 		return nil, err
 	}

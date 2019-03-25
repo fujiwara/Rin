@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/lib/pq"
@@ -167,9 +168,9 @@ func (r Redshift) DSN() string {
 	)
 }
 
-func (r Redshift) DSNWithPassword(pass string) string {
+func (r Redshift) DSNWith(user, password string) string {
 	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s",
-		url.QueryEscape(r.User), url.QueryEscape(pass),
+		url.QueryEscape(user), url.QueryEscape(password),
 		url.QueryEscape(r.Host), r.Port, url.QueryEscape(r.DBName),
 	)
 }
@@ -219,7 +220,11 @@ func fetchHTTP(u *url.URL) ([]byte, error) {
 
 func fetchS3(u *url.URL) ([]byte, error) {
 	log.Println("[info] fetching from", u)
-	downloader := s3manager.NewDownloader(Sessions.S3)
+	sess := Sessions.S3
+	if sess == nil {
+		sess = session.Must(session.NewSession())
+	}
+	downloader := s3manager.NewDownloader(sess)
 
 	buf := &aws.WriteAtBuffer{}
 	_, err := downloader.Download(buf, &s3.GetObjectInput{
