@@ -78,7 +78,7 @@ func RunWithContext(ctx context.Context, configFile string, batchMode bool) erro
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var wg sync.WaitGroup
-	wg.Add(1)
+	wg.Add(2) // signal handler + sqsWorker
 
 	// wait for signal
 	go func() {
