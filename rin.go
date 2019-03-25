@@ -17,7 +17,7 @@ import (
 
 var config *Config
 var MaxDeleteRetry = 8
-var Sessions *SessionStore
+var Sessions = &SessionStore{}
 
 type SessionStore struct {
 	SQS      *session.Session
@@ -55,7 +55,7 @@ func RunWithContext(ctx context.Context, configFile string, batchMode bool) erro
 		log.Println("[info] Define target", target.String())
 	}
 
-	if Sessions == nil {
+	if Sessions.SQS == nil {
 		c := &aws.Config{
 			Region: aws.String(config.Credentials.AWS_REGION),
 		}
