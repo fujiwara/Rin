@@ -8,6 +8,26 @@ Rin is a Redshift data Importer by SQS messaging.
 2. [S3 event notifications](https://docs.aws.amazon.com/AmazonS3/latest/dev/NotificationHowTo.html) will send to a message to SQS.
 3. Rin will fetch messages from SQS, and publish a "COPY" query to Redshift.
 
+## Installation
+
+### Binary packages
+
+[Releases](https://github.com/fujiwara/Rin/releases)
+
+### Homebrew
+
+```console
+$ brew install fujiwara/tap/rin
+```
+
+### Docker
+
+[DockerHub](https://cloud.docker.com/u/fujiwara/repository/docker/fujiwara/rin)
+
+```console
+$ docker pull fujiwara/rin:latest
+```
+
 ## Configuration
 
 [Configuring Amazon S3 Event Notifications](https://docs.aws.amazon.com/AmazonS3/latest/dev/NotificationHowTo.html).
