@@ -54,9 +54,11 @@ func (c Credentials) RedshiftCredential() string {
 }
 
 type Target struct {
-	Redshift   *Redshift `yaml:"redshift"`
-	S3         *S3       `yaml:"s3"`
-	SQLOption  string    `yaml:"sql_option"`
+	Redshift  *Redshift `yaml:"redshift"`
+	S3        *S3       `yaml:"s3"`
+	SQLOption string    `yaml:"sql_option"`
+	Break     bool      `yaml:"break"`
+
 	keyMatcher func(string) (bool, *[]string)
 }
 
