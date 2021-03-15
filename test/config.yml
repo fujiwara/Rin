@@ -26,10 +26,19 @@ targets:
 
   - redshift:
       schema: xxx
+      table: bar_break
+    s3:
+      key_prefix: test/bar/break
+    sql_option: "CSV DELIMITER ',' ESCAPE"
+    break: true
+
+  - redshift:
+      schema: xxx
       table: bar
     s3:
       key_prefix: test/bar
     sql_option: "CSV DELIMITER ',' ESCAPE"
+    break: true
 
   - redshift:
       schema: $1

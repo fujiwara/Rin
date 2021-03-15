@@ -14,17 +14,22 @@ var BrokenConfig = []string{
 }
 
 var Expected = [][]string{
-	[]string{
+	{
 		"test.bucket.test",
 		"test/foo/xxx.json",
 		`/* Rin */ COPY "foo" FROM 's3://test.bucket.test/test/foo/xxx.json' CREDENTIALS 'aws_access_key_id=AAA;aws_secret_access_key=SSS' REGION 'ap-northeast-1' JSON 'auto' GZIP`,
 	},
-	[]string{
+	{
+		"test.bucket.test",
+		"test/bar/break",
+		`/* Rin */ COPY "xxx"."bar_break" FROM 's3://test.bucket.test/test/bar/break' CREDENTIALS 'aws_access_key_id=AAA;aws_secret_access_key=SSS' REGION 'ap-northeast-1' CSV DELIMITER ',' ESCAPE`,
+	},
+	{
 		"test.bucket.test",
 		"test/bar/y's.csv",
 		`/* Rin */ COPY "xxx"."bar" FROM 's3://test.bucket.test/test/bar/y''s.csv' CREDENTIALS 'aws_access_key_id=AAA;aws_secret_access_key=SSS' REGION 'ap-northeast-1' CSV DELIMITER ',' ESCAPE`,
 	},
-	[]string{
+	{
 		"example.bucket",
 		"test/s1/t256/aaa.json",
 		`/* Rin */ COPY "s1"."t256" FROM 's3://example.bucket/test/s1/t256/aaa.json' CREDENTIALS 'aws_access_key_id=AAA;aws_secret_access_key=SSS' REGION 'ap-northeast-1' JSON 'auto' GZIP`,
@@ -32,17 +37,22 @@ var Expected = [][]string{
 }
 
 var ExpectedIAMRole = [][]string{
-	[]string{
+	{
 		"test.bucket.test",
 		"test/foo/xxx.json",
 		`/* Rin */ COPY "foo" FROM 's3://test.bucket.test/test/foo/xxx.json' CREDENTIALS 'aws_iam_role=arn:aws:iam::123456789012:role/rin' REGION 'ap-northeast-1' JSON 'auto' GZIP`,
 	},
-	[]string{
+	{
+		"test.bucket.test",
+		"test/bar/break",
+		`/* Rin */ COPY "xxx"."bar_break" FROM 's3://test.bucket.test/test/bar/break' CREDENTIALS 'aws_iam_role=arn:aws:iam::123456789012:role/rin' REGION 'ap-northeast-1' CSV DELIMITER ',' ESCAPE`,
+	},
+	{
 		"test.bucket.test",
 		"test/bar/y's.csv",
 		`/* Rin */ COPY "xxx"."bar" FROM 's3://test.bucket.test/test/bar/y''s.csv' CREDENTIALS 'aws_iam_role=arn:aws:iam::123456789012:role/rin' REGION 'ap-northeast-1' CSV DELIMITER ',' ESCAPE`,
 	},
-	[]string{
+	{
 		"example.bucket",
 		"test/s1/t256/aaa.json",
 		`/* Rin */ COPY "s1"."t256" FROM 's3://example.bucket/test/s1/t256/aaa.json' CREDENTIALS 'aws_iam_role=arn:aws:iam::123456789012:role/rin' REGION 'ap-northeast-1' JSON 'auto' GZIP`,
@@ -74,24 +84,30 @@ func testConfig(t *testing.T, name string, expected [][]string) {
 		t.Log("target:", target)
 	}
 	t.Log("global.sql_option", config.SQLOption)
-	if len(config.Targets) != 3 {
+	if len(config.Targets) != 4 {
 		t.Error("invalid targets len", len(config.Targets))
 	}
-	for i, target := range config.Targets {
-		e := expected[i]
+	for _, e := range expected {
 		bucket := e[0]
 		key := e[1]
-		ok, cap := target.Match(bucket, key)
-		if !ok {
-			t.Errorf("%s %s is not match target: %s", bucket, key, target)
-		}
-		sql, err := target.BuildCopySQL(key, config.Credentials, cap)
-		if err != nil {
-			t.Error(err)
+		var sql string
+		var err error
+		for _, target := range config.Targets {
+			ok, cap := target.Match(bucket, key)
+			if !ok {
+				continue
+			}
+			sql, err = target.BuildCopySQL(key, config.Credentials, cap)
+			if err != nil {
+				t.Error(err)
+			}
+			t.Log(sql)
+			if target.Break {
+				break
+			}
 		}
 		if sql != e[2] {
 			t.Errorf("unexpected SQL:\n%s\n%s", sql, e[2])
 		}
-		t.Log(sql)
 	}
 }

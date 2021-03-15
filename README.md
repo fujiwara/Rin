@@ -71,6 +71,7 @@ targets:
       table: bar
     s3:
       key_prefix: test/bar
+    break: true       # do not try following target
 
   - redshift:
       schema: $1      # expand by key_regexp captured value.

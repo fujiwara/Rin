@@ -20,6 +20,7 @@ var (
 func Import(event Event) (int, error) {
 	imported := 0
 	for _, record := range event.Records {
+	TARGETS:
 		for _, target := range config.Targets {
 			if ok, cap := target.MatchEventRecord(record); ok {
 				err := ImportRedshift(target, record, cap)
@@ -27,6 +28,9 @@ func Import(event Event) (int, error) {
 					return imported, err
 				} else {
 					imported++
+				}
+				if target.Break {
+					break TARGETS
 				}
 			}
 		}
