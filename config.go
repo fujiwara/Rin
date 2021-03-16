@@ -58,6 +58,7 @@ type Target struct {
 	S3        *S3       `yaml:"s3"`
 	SQLOption string    `yaml:"sql_option"`
 	Break     bool      `yaml:"break"`
+	Discard   bool      `yaml:"discard"`
 
 	keyMatcher func(string) (bool, *[]string)
 }
