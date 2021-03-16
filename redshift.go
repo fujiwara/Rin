@@ -23,6 +23,9 @@ func Import(event Event) (int, error) {
 	TARGETS:
 		for _, target := range config.Targets {
 			if ok, cap := target.MatchEventRecord(record); ok {
+				if target.Discard {
+					break TARGETS
+				}
 				err := ImportRedshift(target, record, cap)
 				if err != nil {
 					return imported, err

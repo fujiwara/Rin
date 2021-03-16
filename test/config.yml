@@ -19,6 +19,10 @@ redshift:
   password: test_pass
 
 targets:
+  - s3:
+      key_prefix: test/foo/discard
+    discard: true
+
   - redshift:
       table: foo
     s3:

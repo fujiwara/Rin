@@ -21,6 +21,11 @@ var Expected = [][]string{
 	},
 	{
 		"test.bucket.test",
+		"test/foo/discard/xxx.json",
+		"",
+	},
+	{
+		"test.bucket.test",
 		"test/bar/break",
 		`/* Rin */ COPY "xxx"."bar_break" FROM 's3://test.bucket.test/test/bar/break' CREDENTIALS 'aws_access_key_id=AAA;aws_secret_access_key=SSS' REGION 'ap-northeast-1' CSV DELIMITER ',' ESCAPE`,
 	},
@@ -41,6 +46,11 @@ var ExpectedIAMRole = [][]string{
 		"test.bucket.test",
 		"test/foo/xxx.json",
 		`/* Rin */ COPY "foo" FROM 's3://test.bucket.test/test/foo/xxx.json' CREDENTIALS 'aws_iam_role=arn:aws:iam::123456789012:role/rin' REGION 'ap-northeast-1' JSON 'auto' GZIP`,
+	},
+	{
+		"test.bucket.test",
+		"test/foo/discard/xxx.json",
+		"",
 	},
 	{
 		"test.bucket.test",
@@ -80,11 +90,8 @@ func testConfig(t *testing.T, name string, expected [][]string) {
 	if err != nil {
 		t.Fatalf("load config failed: %s", err)
 	}
-	for _, target := range config.Targets {
-		t.Log("target:", target)
-	}
-	t.Log("global.sql_option", config.SQLOption)
-	if len(config.Targets) != 4 {
+	//t.Log("global.sql_option", config.SQLOption)
+	if len(config.Targets) != 5 {
 		t.Error("invalid targets len", len(config.Targets))
 	}
 	for _, e := range expected {
@@ -92,22 +99,29 @@ func testConfig(t *testing.T, name string, expected [][]string) {
 		key := e[1]
 		var sql string
 		var err error
-		for _, target := range config.Targets {
+		for i, target := range config.Targets {
 			ok, cap := target.Match(bucket, key)
 			if !ok {
 				continue
 			}
-			sql, err = target.BuildCopySQL(key, config.Credentials, cap)
-			if err != nil {
-				t.Error(err)
+			if target.Discard {
+				t.Log("discard", key, "target", i)
+				break
+			} else {
+				t.Log("build", key, "target", i)
+				sql, err = target.BuildCopySQL(key, config.Credentials, cap)
+				if err != nil {
+					t.Error(err)
+				}
+				//t.Log(sql)
 			}
-			t.Log(sql)
 			if target.Break {
+				t.Log("break", key, "target", i)
 				break
 			}
 		}
 		if sql != e[2] {
-			t.Errorf("unexpected SQL:\n%s\n%s", sql, e[2])
+			t.Errorf("unexpected SQL:\nExpected:%s\nGot:%s", e[2], sql)
 		}
 	}
 }

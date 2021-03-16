@@ -61,7 +61,11 @@ sql_option: "JSON 'auto' GZIP"       # COPY SQL option
 
 # define import target mappings
 targets:
-  - redshift:
+  - s3:
+      key_prefix: test/foo/ignore
+    discard: true  # Do not import and do not try following targets. Matches only.
+
+- redshift:
       table: foo
     s3:
       key_prefix: test/foo
@@ -71,7 +75,7 @@ targets:
       table: bar
     s3:
       key_prefix: test/bar
-    break: true       # do not try following target
+    break: true       # Do not try following targets.
 
   - redshift:
       schema: $1      # expand by key_regexp captured value.
