@@ -25,7 +25,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Release Image
-        env:
-          GITHUB_TOKEN: ${{ secrets.PACKAGES_RELEASE_TOKEN }}
         run: |
+          echo ${{ secrets.PACKAGES_RELEASE_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
           make release-image

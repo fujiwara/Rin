@@ -26,9 +26,8 @@ clean:
 
 image:
 	docker build \
-		--build-arg VERSION=$(GIT_VER) \
 		--tag ghcr.io/fujiwara/rin:$(GIT_VER) \
 		.
 
 release-image: image
-	docker push ghcr.io/fujiwara/rin/$(GIT_VER)
+	docker push ghcr.io/fujiwara/rin:$(GIT_VER)
