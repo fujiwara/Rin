@@ -1,17 +1,10 @@
-FROM golang:1.12.1-stretch AS build-env
-
-ENV CGO_ENABLED=0
-RUN mkdir -p /go/src/github.com/fujiwara/Rin
-COPY . /go/src/github.com/fujiwara/Rin
-WORKDIR /go/src/github.com/fujiwara/Rin
-RUN make clean
-RUN make test
-RUN make install
-
-FROM alpine:3.9
+FROM alpine:3.12.4
 LABEL maintainer "fujiwara <fujiwara.shunichiro@gmail.com>"
 
-RUN apk --no-cache add ca-certificates
-COPY --from=build-env /go/bin/rin /usr/local/bin
+ARG VERSION=1.1.0-pre
+RUN apk --no-cache add ca-certificates curl
+RUN curl -sL https://github.com/fujiwara/Rin/releases/download/v${VERSION}/Rin_${VERSION}_linux_amd64.tar.gz \
+    | tar zxvf - \
+    && install rin /usr/local/bin
 WORKDIR /
 ENTRYPOINT ["/usr/local/bin/rin"]

@@ -23,3 +23,12 @@ packages: config.go redshift.go rin.go event.go
 
 clean:
 	rm -f cmd/rin/rin pkg/* test/ls_tmp/*
+
+image:
+	docker build \
+		--build-arg VERSION=$(GIT_VER) \
+		--tag ghcr.io/fujiwara/rin:$(GIT_VER) \
+		.
+
+release-image: image
+	docker push ghcr.io/fujiwara/rin/$(GIT_VER)
