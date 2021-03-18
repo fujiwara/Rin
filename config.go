@@ -69,7 +69,16 @@ type SQLParam struct {
 }
 
 func (t *Target) String() string {
-	return strings.Join([]string{t.S3.String(), t.Redshift.String()}, " => ")
+	var s string
+	if t.Discard {
+		s = strings.Join([]string{t.S3.String(), "Discard"}, " => ")
+	} else {
+		s = strings.Join([]string{t.S3.String(), t.Redshift.String()}, " => ")
+	}
+	if t.Break {
+		s = s + " => Break"
+	}
+	return s
 }
 
 func (t *Target) Match(bucket, key string) (bool, *[]string) {
