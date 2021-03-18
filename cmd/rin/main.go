@@ -21,6 +21,7 @@ func main() {
 		showVersion bool
 		batchMode   bool
 		debug       bool
+		dryRun      bool
 	)
 	flag.StringVar(&config, "config", "config.yaml", "config file path")
 	flag.StringVar(&config, "c", "config.yaml", "config file path")
@@ -30,6 +31,7 @@ func main() {
 	flag.BoolVar(&showVersion, "v", false, "show version")
 	flag.BoolVar(&batchMode, "batch", false, "batch mode")
 	flag.BoolVar(&batchMode, "b", false, "batch mode")
+	flag.BoolVar(&dryRun, "dry-run", false, "dry run mode (load configuration only)")
 	flag.Parse()
 
 	if showVersion {
@@ -50,7 +52,11 @@ func main() {
 	log.SetOutput(filter)
 	log.Println("[info] rin version:", version)
 
-	if err := rin.Run(config, batchMode); err != nil {
+	run := rin.Run
+	if dryRun {
+		run = rin.DryRun
+	}
+	if err := run(config, batchMode); err != nil {
 		log.Println("[error]", err)
 		os.Exit(1)
 	}

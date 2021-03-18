@@ -40,6 +40,19 @@ func (e NoMessageError) Error() string {
 	return e.s
 }
 
+func DryRun(configFile string, batchMode bool) error {
+	var err error
+	log.Println("[info] Loading config:", configFile)
+	config, err = LoadConfig(configFile)
+	if err != nil {
+		return err
+	}
+	for _, target := range config.Targets {
+		log.Println("[info] Define target", target.String())
+	}
+	return nil
+}
+
 func Run(configFile string, batchMode bool) error {
 	return RunWithContext(context.Background(), configFile, batchMode)
 }
