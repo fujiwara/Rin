@@ -1,7 +1,7 @@
 package rin_test
 
 import (
-	"io"
+	"io/ioutil"
 	"os"
 	"testing"
 
@@ -78,7 +78,7 @@ func TestParseTestEvent(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	b, _ := io.ReadAll(f)
+	b, _ := ioutil.ReadAll(f)
 	f.Close()
 
 	event, err := rin.ParseEvent(b)
