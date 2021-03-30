@@ -191,16 +191,20 @@ func handleMessage(ctx context.Context, svc *sqs.SQS, queueUrl *string) error {
 		log.Printf("[error] [%s] Can't parse event from Body. %s", msgId, err)
 		return err
 	}
-	log.Printf("[info] [%s] Importing event: %s", msgId, event)
-	n, err := Import(event)
-	if err != nil {
-		log.Printf("[error] [%s] Import failed. %s", msgId, err)
-		return err
-	}
-	if n == 0 {
-		log.Printf("[warn] [%s] All events were not matched for any targets. Ignored.", msgId)
+	if event.IsTestEvent() {
+		log.Printf("[info] [%s] Skipping %s", msgId, event.String())
 	} else {
-		log.Printf("[info] [%s] %d import action completed.", msgId, n)
+		log.Printf("[info] [%s] Importing event: %s", msgId, event)
+		n, err := Import(event)
+		if err != nil {
+			log.Printf("[error] [%s] Import failed. %s", msgId, err)
+			return err
+		}
+		if n == 0 {
+			log.Printf("[warn] [%s] All events were not matched for any targets. Ignored.", msgId)
+		} else {
+			log.Printf("[info] [%s] %d actions completed.", msgId, n)
+		}
 	}
 	_, err = svc.DeleteMessage(&sqs.DeleteMessageInput{
 		QueueUrl:      queueUrl,
