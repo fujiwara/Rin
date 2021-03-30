@@ -1,6 +1,8 @@
 package rin_test
 
 import (
+	"io/ioutil"
+	"os"
 	"testing"
 
 	rin "github.com/fujiwara/Rin"
@@ -50,6 +52,9 @@ func TestParseEvent(t *testing.T) {
 	if err != nil {
 		t.Error("json decode error", err)
 	}
+	if event.IsTestEvent() {
+		t.Error("must not be a test event")
+	}
 	r := event.Records[0]
 	if r.EventName != "ObjectCreated:Put" {
 		t.Error("unexpected EventName", r.EventName)
@@ -65,5 +70,25 @@ func TestParseEvent(t *testing.T) {
 	}
 	if r.S3.Object.Key != "foo/bar=baz.json" {
 		t.Error("unexpected key", r.S3.Object.Key)
+	}
+}
+
+func TestParseTestEvent(t *testing.T) {
+	f, err := os.Open("test/testevent.json")
+	if err != nil {
+		t.Error(err)
+	}
+	b, _ := ioutil.ReadAll(f)
+	f.Close()
+
+	event, err := rin.ParseEvent(b)
+	if err != nil {
+		t.Error("json decode error", err)
+	}
+	if !event.IsTestEvent() {
+		t.Errorf("not a test event %s", string(b))
+	}
+	if event.String() != "s3:TestEvent for example-bucket" {
+		t.Errorf("unexpected string %s", event.String())
 	}
 }
