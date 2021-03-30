@@ -9,7 +9,12 @@ import (
 
 func ParseEvent(b []byte) (Event, error) {
 	var e Event
-	err := json.Unmarshal(b, &e)
+	if err := json.Unmarshal(b, &e); err != nil {
+		return e, err
+	}
+	if len(e.Records) == 0 && e.IsTestEvent() {
+		return e, nil
+	}
 	for _, r := range e.Records {
 		if !strings.Contains(r.S3.Object.Key, "%") {
 			continue
@@ -18,14 +23,24 @@ func ParseEvent(b []byte) (Event, error) {
 			r.S3.Object.Key = _key
 		}
 	}
-	return e, err
+	return e, nil
 }
 
 type Event struct {
 	Records []*EventRecord `json:"Records"`
+	Event   string
+	Bucket  string
+}
+
+func (e Event) IsTestEvent() bool {
+	return e.Event == "s3:TestEvent"
 }
 
 func (e Event) String() string {
+	if e.IsTestEvent() {
+		return fmt.Sprintf("%s for %s", e.Event, e.Bucket)
+	}
+
 	s := make([]string, len(e.Records))
 	for i, r := range e.Records {
 		s[i] = r.String()

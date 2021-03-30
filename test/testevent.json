@@ -1,0 +1,8 @@
+{
+    "Service": "Amazon S3",
+    "Event": "s3:TestEvent",
+    "Time": "2021-03-30T05:58:18.184Z",
+    "Bucket": "example-bucket",
+    "RequestId": "C0CMH2QNHV3A1SGQ",
+    "HostId": "/9JSRrT+j26Hk56OjL/qeDZM76Otmaj3oY9hnTuD/kdyN+WN6vDli3q0LPJzUMRW5y/yVmTOlzQ="
+}
