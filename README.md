@@ -52,6 +52,7 @@ redshift:
   user: test_user
   password: '{{ must_env "REDSHIFT_PASSWORD" }}'
   schema: public
+  reconnect_on_error: true # disconnect Redshift on error occurred
 
 s3:
   bucket: test.bucket.test
