@@ -29,7 +29,7 @@ func Import(event Event) (int, error) {
 				}
 				err := ImportRedshift(target, record, cap)
 				if err != nil {
-					if config.Redshift.ReconnectOnError {
+					if aws.BoolValue(config.Redshift.ReconnectOnError) {
 						DisconnectToRedshift(target)
 					}
 					return processed, err

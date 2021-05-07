@@ -171,7 +171,7 @@ type Redshift struct {
 	Password         string `yaml:"password"`
 	Schema           string `yaml:"schema"`
 	Table            string `yaml:"table"`
-	ReconnectOnError bool   `yaml:"reconnect_on_error"`
+	ReconnectOnError *bool  `yaml:"reconnect_on_error"`
 }
 
 func (r Redshift) DSN() string {
@@ -309,7 +309,9 @@ func (c *Config) merge() error {
 			if tr.Table == "" {
 				tr.Table = cr.Table
 			}
-			tr.ReconnectOnError = cr.ReconnectOnError
+			if tr.ReconnectOnError == nil {
+				tr.ReconnectOnError = cr.ReconnectOnError
+			}
 		}
 
 		ts := t.S3
