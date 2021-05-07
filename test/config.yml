@@ -17,6 +17,7 @@ redshift:
   dbname: test
   user: test_user
   password: test_pass
+  reconnect_on_error: true
 
 targets:
   - s3:

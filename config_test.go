@@ -119,6 +119,9 @@ func testConfig(t *testing.T, name string, expected [][]string) {
 				t.Log("break", key, "target", i)
 				break
 			}
+			if !target.Redshift.ReconnectOnError {
+				t.Error("reconnect_on_error must be true")
+			}
 		}
 		if sql != e[2] {
 			t.Errorf("unexpected SQL:\nExpected:%s\nGot:%s", e[2], sql)
