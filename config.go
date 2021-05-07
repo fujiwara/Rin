@@ -164,13 +164,14 @@ func (s3 S3) String() string {
 }
 
 type Redshift struct {
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	DBName   string `yaml:"dbname"`
-	User     string `yaml:"user"`
-	Password string `yaml:"password"`
-	Schema   string `yaml:"schema"`
-	Table    string `yaml:"table"`
+	Host             string `yaml:"host"`
+	Port             int    `yaml:"port"`
+	DBName           string `yaml:"dbname"`
+	User             string `yaml:"user"`
+	Password         string `yaml:"password"`
+	Schema           string `yaml:"schema"`
+	Table            string `yaml:"table"`
+	ReconnectOnError *bool  `yaml:"reconnect_on_error"`
 }
 
 func (r Redshift) DSN() string {
@@ -307,6 +308,9 @@ func (c *Config) merge() error {
 			}
 			if tr.Table == "" {
 				tr.Table = cr.Table
+			}
+			if tr.ReconnectOnError == nil {
+				tr.ReconnectOnError = cr.ReconnectOnError
 			}
 		}
 

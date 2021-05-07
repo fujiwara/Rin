@@ -29,6 +29,9 @@ func Import(event Event) (int, error) {
 				}
 				err := ImportRedshift(target, record, cap)
 				if err != nil {
+					if aws.BoolValue(config.Redshift.ReconnectOnError) {
+						DisconnectToRedshift(target)
+					}
 					return processed, err
 				} else {
 					processed++
@@ -40,6 +43,20 @@ func Import(event Event) (int, error) {
 		}
 	}
 	return processed, nil
+}
+
+func DisconnectToRedshift(target *Target) {
+	r := target.Redshift
+	dsn := r.DSN()
+	log.Println("Disconnect to Redshift", dsn)
+
+	DBPoolMutex.Lock()
+	defer DBPoolMutex.Unlock()
+
+	if db := DBPool[dsn]; db != nil {
+		db.Close()
+	}
+	delete(DBPool, dsn)
 }
 
 func ConnectToRedshift(target *Target) (*sql.DB, error) {
