@@ -22,10 +22,10 @@ $ brew install fujiwara/tap/rin
 
 ### Docker
 
-[DockerHub](https://cloud.docker.com/u/fujiwara/repository/docker/fujiwara/rin)
+[GitHub Packages](https://github.com/users/fujiwara/packages/container/package/rin)
 
 ```console
-$ docker pull fujiwara/rin:latest
+$ docker pull ghcr.io/fujiwara/rin:v1.1.3
 ```
 
 ## Configuration
