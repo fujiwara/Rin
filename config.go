@@ -181,13 +181,6 @@ func (r Redshift) DSN() string {
 	)
 }
 
-func (r Redshift) MaskedDSN() string {
-	return fmt.Sprintf("postgres://%s:*******@%s:%d/%s",
-		url.QueryEscape(r.User),
-		url.QueryEscape(r.Host), r.Port, url.QueryEscape(r.DBName),
-	)
-}
-
 func (r Redshift) DSNWith(user, password string) string {
 	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s",
 		url.QueryEscape(user), url.QueryEscape(password),
