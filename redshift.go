@@ -48,7 +48,7 @@ func Import(event Event) (int, error) {
 func DisconnectToRedshift(target *Target) {
 	r := target.Redshift
 	dsn := r.DSN()
-	log.Println("Disconnect to Redshift", dsn)
+	log.Println("[info] Disconnect to Redshift", r.MaskedDSN())
 
 	DBPoolMutex.Lock()
 	defer DBPoolMutex.Unlock()
@@ -73,7 +73,7 @@ func ConnectToRedshift(target *Target) (*sql.DB, error) {
 			delete(DBPool, dsn)
 		}
 	}
-	log.Println("Connect to Redshift", dsn)
+	log.Println("[info] Connect to Redshift", r.MaskedDSN())
 
 	var user, password = r.User, r.Password
 	if password == "" {
