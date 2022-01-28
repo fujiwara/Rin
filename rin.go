@@ -163,7 +163,6 @@ func handleMessage(ctx context.Context, svc *sqs.SQS, queueUrl *string) error {
 	res, err := svc.ReceiveMessageWithContext(ctx, &sqs.ReceiveMessageInput{
 		MaxNumberOfMessages: aws.Int64(1),
 		QueueUrl:            queueUrl,
-		WaitTimeSeconds:     aws.Int64(1),
 	})
 	if err != nil {
 		return err
