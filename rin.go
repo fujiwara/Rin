@@ -42,7 +42,7 @@ func (e NoMessageError) Error() string {
 
 func DryRun(configFile string, opt *Option) error {
 	var err error
-	log.Printf("[info] Runtime option: %v", *opt)
+	log.Printf("[info] Runtime option: %#v", *opt)
 	log.Println("[info] Loading config:", configFile)
 	config, err = LoadConfig(configFile)
 	if err != nil {
@@ -60,7 +60,7 @@ func Run(configFile string, opt *Option) error {
 
 func RunWithContext(ctx context.Context, configFile string, opt *Option) error {
 	var err error
-	log.Printf("[info] Runtime option: %v", *opt)
+	log.Printf("[info] Runtime option: %#v", *opt)
 	log.Println("[info] Loading config:", configFile)
 	config, err = LoadConfig(configFile)
 	if err != nil {
@@ -93,11 +93,10 @@ func RunWithContext(ctx context.Context, configFile string, opt *Option) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var wg sync.WaitGroup
-	wg.Add(2) // signal handler + sqsWorker
+	wg.Add(1)
 
 	// wait for signal
 	go func() {
-		defer wg.Done()
 		sig := <-signalCh
 		log.Printf("[info] Got signal: %s(%d)", sig, sig)
 		log.Println("[info] Shutting down worker...")
@@ -114,11 +113,6 @@ func RunWithContext(ctx context.Context, configFile string, opt *Option) error {
 		return nil
 	}
 	return err
-}
-
-func waitForRetry() {
-	log.Println("[warn] Retry after 10 sec.")
-	time.Sleep(10 * time.Second)
 }
 
 func sqsWorker(ctx context.Context, wg *sync.WaitGroup, svc *sqs.SQS, opt *Option) error {
@@ -145,15 +139,20 @@ func sqsWorker(ctx context.Context, wg *sync.WaitGroup, svc *sqs.SQS, opt *Optio
 		default:
 		}
 		if err := handleMessage(ctx, svc, res.QueueUrl); err != nil {
+			if ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
+				log.Println("[debug]", err)
+				return nil
+			}
 			if _, ok := err.(NoMessageError); ok {
 				if opt.Batch {
 					break
+				} else {
+					continue
 				}
 			}
-			if ctx.Err() == context.Canceled {
-				return nil
-			}
-			waitForRetry()
+			log.Println("[error]", err)
+			log.Println("[warn] Retry after 10 sec.")
+			time.Sleep(10 * time.Second)
 		}
 	}
 	return nil
@@ -164,6 +163,7 @@ func handleMessage(ctx context.Context, svc *sqs.SQS, queueUrl *string) error {
 	res, err := svc.ReceiveMessageWithContext(ctx, &sqs.ReceiveMessageInput{
 		MaxNumberOfMessages: aws.Int64(1),
 		QueueUrl:            queueUrl,
+		WaitTimeSeconds:     aws.Int64(1),
 	})
 	if err != nil {
 		return err

@@ -15,12 +15,12 @@ func TestBreakerForWorker(t *testing.T) {
 	}
 	breaker := opt.NewBreakerFunc()
 	for i := 0; i < 10000; i++ {
-		if breaker() == false {
+		if breaker() {
 			t.Error("must be true in worker mode")
 		}
 	}
 	time.Sleep(2 * time.Second)
-	if breaker() == false {
+	if breaker() {
 		t.Error("must be true in worker mode")
 	}
 }

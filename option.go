@@ -22,7 +22,7 @@ func (o *Option) Mode() string {
 func (o *Option) NewBreakerFunc() func() bool {
 	if !o.Batch {
 		// worker mode. never break
-		return func() bool { return true }
+		return func() bool { return false }
 	}
 	var (
 		tm      *time.Timer
@@ -35,7 +35,6 @@ func (o *Option) NewBreakerFunc() func() bool {
 	return func() bool {
 		counter++
 		if o.MaxExecCount > 0 && counter > o.MaxExecCount {
-			log.Printf("[debug] Execute %d times.", counter)
 			log.Printf("[info] Execution count reached to max exection count %d", o.MaxExecCount)
 			return true
 		}
