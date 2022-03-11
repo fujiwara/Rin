@@ -92,3 +92,23 @@ func TestParseTestEvent(t *testing.T) {
 		t.Errorf("unexpected string %s", event.String())
 	}
 }
+
+func TestParseTestEventSns(t *testing.T) {
+	f, err := os.Open("test/testeventsns.json")
+	if err != nil {
+		t.Error(err)
+	}
+	b, _ := ioutil.ReadAll(f)
+	f.Close()
+
+	event, err := rin.ParseEvent(b)
+	if err != nil {
+		t.Error("json decode error", err)
+	}
+	if !event.IsTestEvent() {
+		t.Errorf("not a test event %s", string(b))
+	}
+	if event.String() != "s3:TestEvent for example-bucket" {
+		t.Errorf("unexpected string %s", event.String())
+	}
+}

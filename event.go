@@ -9,6 +9,17 @@ import (
 
 func ParseEvent(b []byte) (Event, error) {
 	var e Event
+
+	// If event comes to sqs through sns, we need to unmarshal the sns event first
+	var snsE SnsEvent
+	if err := json.Unmarshal(b, &snsE); err != nil {
+		return e, err
+	}
+	if snsE.Message != nil {
+		b = []byte(*snsE.Message)
+	}
+
+	// Unmarshall s3 event
 	if err := json.Unmarshal(b, &e); err != nil {
 		return e, err
 	}
@@ -24,6 +35,10 @@ func ParseEvent(b []byte) (Event, error) {
 		}
 	}
 	return e, nil
+}
+
+type SnsEvent struct {
+	Message *string
 }
 
 type Event struct {

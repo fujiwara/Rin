@@ -1,0 +1,3 @@
+{
+    "Message": "{\n    \"Service\": \"Amazon S3\",\n    \"Event\": \"s3:TestEvent\",\n    \"Time\": \"2021-03-30T05:58:18.184Z\",\n    \"Bucket\": \"example-bucket\",\n    \"RequestId\": \"C0CMH2QNHV3A1SGQ\",\n    \"HostId\": \"/9JSRrT+j26Hk56OjL/qeDZM76Otmaj3oY9hnTuD/kdyN+WN6vDli3q0LPJzUMRW5y/yVmTOlzQ=\"\n}\n"
+}
