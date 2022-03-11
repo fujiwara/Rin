@@ -2,7 +2,7 @@ GIT_VER := $(shell git describe --tags)
 DATE := $(shell date +%Y-%m-%dT%H:%M:%S%z)
 export GO111MODULE := on
 
-.PHONY: test local get-deps install clean
+.PHONY: test test-localstack install clean image release-image
 
 cmd/rin/rin: config.go redshift.go rin.go event.go cmd/rin/main.go
 	cd cmd/rin && go build -ldflags "-s -w -X main.version=${GIT_VER} -X main.buildDate=${DATE}"
@@ -17,13 +17,13 @@ test-localstack:
 test:
 	go test -v ./...
 
-dist:
+dist/:
 	goreleaser build --snapshot --rm-dist
 
 clean:
 	rm -rf cmd/rin/rin pkg/* test/ls_tmp/* dist/
 
-image: clean dist
+image: dist/
 	docker build \
 		--tag ghcr.io/fujiwara/rin:$(GIT_VER) \
 		.
