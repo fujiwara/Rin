@@ -17,14 +17,13 @@ test-localstack:
 test:
 	go test -v ./...
 
-packages: config.go redshift.go rin.go event.go
-	cd cmd/rin && gox -os="linux darwin" -arch="amd64" -output "../../pkg/{{.Dir}}-${GIT_VER}-{{.OS}}-{{.Arch}}" -ldflags "-s -w -X main.version=${GIT_VER} -X main.buildDate=${DATE}"
-	cd pkg && find . -name "*${GIT_VER}*" -type f -exec zip {}.zip {} \;
+dist:
+	goreleaser build --snapshot --rm-dist
 
 clean:
-	rm -f cmd/rin/rin pkg/* test/ls_tmp/*
+	rm -rf cmd/rin/rin pkg/* test/ls_tmp/* dist/
 
-image:
+image: clean dist
 	docker build \
 		--tag ghcr.io/fujiwara/rin:$(GIT_VER) \
 		.

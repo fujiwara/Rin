@@ -1,4 +1,4 @@
-FROM alpine:3.12.4
+FROM alpine:3.15.0
 LABEL maintainer "fujiwara <fujiwara.shunichiro@gmail.com>"
 
 RUN apk --no-cache add ca-certificates
