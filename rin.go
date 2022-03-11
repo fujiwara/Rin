@@ -1,4 +1,4 @@
-package rin
+package main
 
 import (
 	"context"

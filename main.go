@@ -6,7 +6,10 @@ import (
 	"log"
 	"os"
 
-	rin "github.com/fujiwara/Rin"
+	//rin "github.com/fujiwara/Rin"
+	//"rin"
+	//rin ""
+	//"../../rin.go"
 	"github.com/hashicorp/logutils"
 )
 
@@ -52,9 +55,9 @@ func main() {
 	log.SetOutput(filter)
 	log.Println("[info] rin version:", version)
 
-	run := rin.Run
+	run := Run
 	if dryRun {
-		run = rin.DryRun
+		run = DryRun
 	}
 	if err := run(config, batchMode); err != nil {
 		log.Println("[error]", err)
