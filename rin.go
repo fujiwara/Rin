@@ -109,10 +109,13 @@ func RunWithContext(ctx context.Context, configFile string, batchMode bool) erro
 	// wait for signal
 	go func() {
 		defer wg.Done()
-		sig := <-signalCh
-		log.Printf("[info] Got signal: %s(%d)", sig, sig)
-		log.Println("[info] Shutting down worker...")
-		cancel()
+		select {
+		case sig := <-signalCh:
+			log.Printf("[info] Got signal: %s(%d)", sig, sig)
+			log.Println("[info] Shutting down worker...")
+			cancel()
+		case <-ctx.Done():
+		}
 	}()
 
 	// run worker
