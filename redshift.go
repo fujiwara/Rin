@@ -18,7 +18,7 @@ var (
 	redshiftSvc *redshift.Client
 )
 
-func boolValue(b *bool) bool {
+func BoolValue(b *bool) bool {
 	if b != nil {
 		return *b
 	}
@@ -37,7 +37,7 @@ func Import(event Event) (int, error) {
 				}
 				err := ImportRedshift(target, record, cap)
 				if err != nil {
-					if boolValue(config.Redshift.ReconnectOnError) {
+					if BoolValue(config.Redshift.ReconnectOnError) {
 						DisconnectToRedshift(target)
 					}
 					return processed, err

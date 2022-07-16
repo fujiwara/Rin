@@ -4,7 +4,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws"
 	rin "github.com/fujiwara/Rin"
 )
 
@@ -120,7 +119,7 @@ func testConfig(t *testing.T, name string, expected [][]string) {
 				t.Log("break", key, "target", i)
 				break
 			}
-			if !aws.BoolValue(target.Redshift.ReconnectOnError) {
+			if !rin.BoolValue(target.Redshift.ReconnectOnError) {
 				t.Error("reconnect_on_error must be true")
 			}
 		}
