@@ -130,11 +130,6 @@ func RunWithContext(ctx context.Context, configFile string, batchMode bool) erro
 	return err
 }
 
-func waitForRetry() {
-	log.Println("[warn] Retry after 10 sec.")
-	time.Sleep(10 * time.Second)
-}
-
 func sqsWorker(ctx context.Context, wg *sync.WaitGroup, svc *sqs.Client, batchMode bool) error {
 	var mode string
 	if batchMode {
@@ -163,15 +158,8 @@ func sqsWorker(ctx context.Context, wg *sync.WaitGroup, svc *sqs.Client, batchMo
 			if _, ok := err.(NoMessageError); ok {
 				if batchMode {
 					break
-				} else {
-					continue
 				}
-				if ctx.Err() == context.Canceled {
-					return nil
-				}
-				if !batchMode {
-					waitForRetry()
-				}
+				time.Sleep(100 * time.Millisecond)
 			}
 		}
 	}
