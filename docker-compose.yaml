@@ -2,12 +2,9 @@ version: '2.1'
 
 services:
   localstack:
-    image: localstack/localstack
+    image: localstack/localstack:0.13.3
     ports:
-      - "4572:4572" # S3
-      - "4576:4576" # SQS
-      - "4577:4577" # Redshift
-      - "${PORT_WEB_UI-8080}:${PORT_WEB_UI-8080}"
+      - "4566:4566" # localstack
     environment:
       - SERVICES=s3,sqs,redshift
       - DEBUG=${DEBUG- }

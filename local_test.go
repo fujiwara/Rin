@@ -17,9 +17,9 @@ import (
 )
 
 const (
-	SQSEndpoint      = "http://localhost:4576"
-	S3Endpoint       = "http://localhost:4572"
-	RedshiftEndpoint = "http://localhost:4577"
+	SQSEndpoint      = "http://localhost:4566"
+	S3Endpoint       = "http://localhost:4566"
+	RedshiftEndpoint = "http://localhost:4566"
 )
 
 var message = `{
@@ -53,7 +53,7 @@ var sessions = &rin.SessionStore{
 	})),
 }
 
-func TestLocalStack(t *testing.T) {
+func TestLocalStackWorker(t *testing.T) {
 	if os.Getenv("TEST_LOCALSTACK") == "" {
 		return
 	}
@@ -64,10 +64,32 @@ func TestLocalStack(t *testing.T) {
 	defer d2()
 
 	rin.Sessions = sessions
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 
-	if err := rin.RunWithContext(ctx, "s3://rin-test/localstack.yml", false); err != nil {
+	opt := rin.Option{}
+	if err := rin.RunWithContext(ctx, "s3://rin-test/localstack.yml", &opt); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestLocalStackBatch(t *testing.T) {
+	if os.Getenv("TEST_LOCALSTACK") == "" {
+		return
+	}
+	d1 := setupSQS(t)
+	defer d1()
+
+	d2 := setupS3(t)
+	defer d2()
+
+	rin.Sessions = sessions
+	opt := rin.Option{
+		Batch:        true,
+		MaxExecCount: 1,
+	}
+	ctx := context.TODO()
+	if err := rin.RunWithContext(ctx, "s3://rin-test/localstack.yml", &opt); err != nil {
 		t.Error(err)
 	}
 }

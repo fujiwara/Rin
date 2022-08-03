@@ -40,8 +40,9 @@ func (e NoMessageError) Error() string {
 	return e.s
 }
 
-func DryRun(configFile string, batchMode bool) error {
+func DryRun(configFile string, opt *Option) error {
 	var err error
+	log.Printf("[info] Runtime option: %#v", *opt)
 	log.Println("[info] Loading config:", configFile)
 	config, err = LoadConfig(configFile)
 	if err != nil {
@@ -53,12 +54,13 @@ func DryRun(configFile string, batchMode bool) error {
 	return nil
 }
 
-func Run(configFile string, batchMode bool) error {
-	return RunWithContext(context.Background(), configFile, batchMode)
+func Run(configFile string, opt *Option) error {
+	return RunWithContext(context.Background(), configFile, opt)
 }
 
-func RunWithContext(ctx context.Context, configFile string, batchMode bool) error {
+func RunWithContext(ctx context.Context, configFile string, opt *Option) error {
 	var err error
+	log.Printf("[info] Runtime option: %#v", *opt)
 	log.Println("[info] Loading config:", configFile)
 	config, err = LoadConfig(configFile)
 	if err != nil {
@@ -91,11 +93,10 @@ func RunWithContext(ctx context.Context, configFile string, batchMode bool) erro
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var wg sync.WaitGroup
-	wg.Add(2) // signal handler + sqsWorker
+	wg.Add(1)
 
 	// wait for signal
 	go func() {
-		defer wg.Done()
 		sig := <-signalCh
 		log.Printf("[info] Got signal: %s(%d)", sig, sig)
 		log.Println("[info] Shutting down worker...")
@@ -103,7 +104,7 @@ func RunWithContext(ctx context.Context, configFile string, batchMode bool) erro
 	}()
 
 	// run worker
-	err = sqsWorker(ctx, &wg, sqsSvc, batchMode)
+	err = sqsWorker(ctx, &wg, sqsSvc, opt)
 
 	wg.Wait()
 	log.Println("[info] Shutdown.")
@@ -114,20 +115,9 @@ func RunWithContext(ctx context.Context, configFile string, batchMode bool) erro
 	return err
 }
 
-func waitForRetry() {
-	log.Println("[warn] Retry after 10 sec.")
-	time.Sleep(10 * time.Second)
-}
-
-func sqsWorker(ctx context.Context, wg *sync.WaitGroup, svc *sqs.SQS, batchMode bool) error {
-	var mode string
-	if batchMode {
-		mode = "Batch"
-	} else {
-		mode = "Worker"
-	}
-	log.Printf("[info] Starting up SQS %s", mode)
-	defer log.Printf("[info] Shutdown SQS %s", mode)
+func sqsWorker(ctx context.Context, wg *sync.WaitGroup, svc *sqs.SQS, opt *Option) error {
+	log.Printf("[info] Starting up SQS %s", opt.Mode())
+	defer log.Printf("[info] Shutdown SQS %s", opt.Mode())
 	defer wg.Done()
 
 	log.Println("[info] Connect to SQS:", config.QueueName)
@@ -137,26 +127,32 @@ func sqsWorker(ctx context.Context, wg *sync.WaitGroup, svc *sqs.SQS, batchMode 
 	if err != nil {
 		return err
 	}
+	breaker := opt.NewBreakerFunc()
 	for {
+		if breaker() {
+			log.Println("[info] max execution limit reached.")
+			return nil
+		}
 		select {
 		case <-ctx.Done():
 			return nil
 		default:
 		}
 		if err := handleMessage(ctx, svc, res.QueueUrl); err != nil {
+			if ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
+				log.Println("[debug]", err)
+				return nil
+			}
 			if _, ok := err.(NoMessageError); ok {
-				if batchMode {
+				if opt.Batch {
 					break
 				} else {
 					continue
 				}
-				if ctx.Err() == context.Canceled {
-					return nil
-				}
-				if !batchMode {
-					waitForRetry()
-				}
 			}
+			log.Println("[error]", err)
+			log.Println("[warn] Retry after 10 sec.")
+			time.Sleep(10 * time.Second)
 		}
 	}
 	return nil

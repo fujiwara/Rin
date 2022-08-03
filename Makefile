@@ -11,8 +11,9 @@ install: cmd/rin/rin
 	install cmd/rin/rin ${GOPATH}/bin
 
 test-localstack:
-	docker-compose up -d
-	TEST_LOCALSTACK=on dockerize -timeout 30s -wait tcp://localhost:4576 go test -v -run Local ./...
+	docker compose up -d
+	dockerize -timeout 30s -wait tcp://localhost:4566 true
+	TEST_LOCALSTACK=on go test -v -run Local ./...
 
 test:
 	go test -v ./...

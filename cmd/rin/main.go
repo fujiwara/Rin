@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	rin "github.com/fujiwara/Rin"
 	"github.com/hashicorp/logutils"
@@ -22,6 +23,8 @@ func main() {
 		batchMode   bool
 		debug       bool
 		dryRun      bool
+		maxImports  int
+		maxExecTime time.Duration
 	)
 	flag.StringVar(&config, "config", "config.yaml", "config file path")
 	flag.StringVar(&config, "c", "config.yaml", "config file path")
@@ -32,6 +35,8 @@ func main() {
 	flag.BoolVar(&batchMode, "batch", false, "batch mode")
 	flag.BoolVar(&batchMode, "b", false, "batch mode")
 	flag.BoolVar(&dryRun, "dry-run", false, "dry run mode (load configuration only)")
+	flag.IntVar(&maxImports, "max-imports", 0, "max number of imports in batch execution")
+	flag.DurationVar(&maxExecTime, "max-exec-time", 0, "max execution time duration in batch execution (e.g 60s)")
 	flag.Parse()
 
 	if showVersion {
@@ -56,7 +61,12 @@ func main() {
 	if dryRun {
 		run = rin.DryRun
 	}
-	if err := run(config, batchMode); err != nil {
+	opt := rin.Option{
+		Batch:        batchMode,
+		MaxExecCount: maxImports,
+		MaxExecTime:  maxExecTime,
+	}
+	if err := run(config, &opt); err != nil {
 		log.Println("[error]", err)
 		os.Exit(1)
 	}
