@@ -2,13 +2,17 @@ package rin
 
 import (
 	"context"
+	"errors"
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
+	"github.com/aws/aws-lambda-go/events"
+	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -85,6 +89,9 @@ func RunWithContext(ctx context.Context, configFile string, batchMode bool) erro
 		Sessions.S3 = sess
 	}
 	sqsSvc := sqs.New(Sessions.SQS)
+	if isLambda() {
+		return runLambdaHandler()
+	}
 
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, TrapSignals...)
@@ -112,6 +119,10 @@ func RunWithContext(ctx context.Context, configFile string, batchMode bool) erro
 		return nil
 	}
 	return err
+}
+
+func isLambda() bool {
+	return strings.HasPrefix(os.Getenv("AWS_EXECUTION_ENV"), "AWS_Lambda") || os.Getenv("AWS_LAMBDA_RUNTIME_API") != ""
 }
 
 func waitForRetry() {
@@ -186,26 +197,10 @@ func handleMessage(ctx context.Context, svc *sqs.SQS, queueUrl *string) error {
 		}
 	}()
 
-	event, err := ParseEvent([]byte(*msg.Body))
-	if err != nil {
-		log.Printf("[error] [%s] Can't parse event from Body. %s", msgId, err)
+	if err := processEvent(ctx, msgId, *msg.Body); err != nil {
 		return err
 	}
-	if event.IsTestEvent() {
-		log.Printf("[info] [%s] Skipping %s", msgId, event.String())
-	} else {
-		log.Printf("[info] [%s] Importing event: %s", msgId, event)
-		n, err := Import(event)
-		if err != nil {
-			log.Printf("[error] [%s] Import failed. %s", msgId, err)
-			return err
-		}
-		if n == 0 {
-			log.Printf("[warn] [%s] All events were not matched for any targets. Ignored.", msgId)
-		} else {
-			log.Printf("[info] [%s] %d actions completed.", msgId, n)
-		}
-	}
+
 	_, err = svc.DeleteMessage(&sqs.DeleteMessageInput{
 		QueueUrl:      queueUrl,
 		ReceiptHandle: msg.ReceiptHandle,
@@ -233,5 +228,58 @@ func handleMessage(ctx context.Context, svc *sqs.SQS, queueUrl *string) error {
 
 	completed = true
 	log.Printf("[info] [%s] Completed message.", msgId)
+	return nil
+}
+
+func processEvent(ctx context.Context, msgId string, body string) error {
+	event, err := ParseEvent([]byte(body))
+	if err != nil {
+		log.Printf("[error] [%s] Can't parse event from Body. %s", msgId, err)
+		return err
+	}
+	if event.IsTestEvent() {
+		log.Printf("[info] [%s] Skipping %s", msgId, event.String())
+	} else {
+		log.Printf("[info] [%s] Importing event: %s", msgId, event)
+		n, err := Import(event)
+		if err != nil {
+			log.Printf("[error] [%s] Import failed. %s", msgId, err)
+			return err
+		}
+		if n == 0 {
+			log.Printf("[warn] [%s] All events were not matched for any targets. Ignored.", msgId)
+		} else {
+			log.Printf("[info] [%s] %d actions completed.", msgId, n)
+		}
+	}
+	return nil
+}
+
+type SQSBatchResponse struct {
+	BatchItemFailures []BatchItemFailureItem `json:"batchItemFailures,omitempty"`
+}
+
+type BatchItemFailureItem struct {
+	ItemIdentifier string `json:"itemIdentifier"`
+}
+
+func runLambdaHandler() error {
+	log.Println("[info] start lambda handler")
+	lambda.StartWithOptions(func(ctx context.Context, event *events.SQSEvent) (*SQSBatchResponse, error) {
+		resp := &SQSBatchResponse{
+			BatchItemFailures: nil,
+		}
+		for _, record := range event.Records {
+			if record.MessageId == "" {
+				return nil, errors.New("sqs message id is empty")
+			}
+			if err := processEvent(ctx, record.MessageId, record.Body); err != nil {
+				resp.BatchItemFailures = append(resp.BatchItemFailures, BatchItemFailureItem{
+					ItemIdentifier: record.MessageId,
+				})
+			}
+		}
+		return resp, nil
+	})
 	return nil
 }

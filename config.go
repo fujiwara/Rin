@@ -269,7 +269,9 @@ func LoadConfig(path string) (*Config, error) {
 
 func (c *Config) validate() error {
 	if c.QueueName == "" {
-		return fmt.Errorf("queue_name required")
+		if !isLambda() {
+			return fmt.Errorf("queue_name required")
+		}
 	}
 	if len(c.Targets) == 0 {
 		return fmt.Errorf("no targets defined")

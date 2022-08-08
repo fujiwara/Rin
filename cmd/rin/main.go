@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	rin "github.com/fujiwara/Rin"
 	"github.com/hashicorp/logutils"
@@ -32,6 +33,14 @@ func main() {
 	flag.BoolVar(&batchMode, "batch", false, "batch mode")
 	flag.BoolVar(&batchMode, "b", false, "batch mode")
 	flag.BoolVar(&dryRun, "dry-run", false, "dry run mode (load configuration only)")
+	flag.VisitAll(func(f *flag.Flag) {
+		if len(f.Name) <= 1 {
+			return
+		}
+		if s := os.Getenv(strings.ToUpper("RIN_" + f.Name)); s != "" {
+			f.Value.Set(s)
+		}
+	})
 	flag.Parse()
 
 	if showVersion {
