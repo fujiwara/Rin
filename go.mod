@@ -9,4 +9,5 @@ require (
 	github.com/kayac/go-config v0.1.0
 	github.com/lib/pq v1.0.0
 	golang.org/x/net v0.0.0-20190322120337-addf6b3196f6 // indirect
+	gopkg.in/yaml.v2 v2.2.8 // indirect
 )
