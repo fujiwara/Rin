@@ -2,6 +2,7 @@ package rin
 
 import (
 	"context"
+	"errors"
 	"log"
 	"os"
 	"os/signal"
@@ -89,7 +90,7 @@ func RunWithContext(ctx context.Context, configFile string, batchMode bool) erro
 	}
 	sqsSvc := sqs.New(Sessions.SQS)
 	if isLambda() {
-		return runLambdaHandler(ctx)
+		return runLambdaHandler()
 	}
 
 	signalCh := make(chan os.Signal, 1)
@@ -262,13 +263,16 @@ type BatchItemFailureItem struct {
 	ItemIdentifier string `json:"itemIdentifier"`
 }
 
-func runLambdaHandler(ctx context.Context) error {
+func runLambdaHandler() error {
 	log.Println("[info] start lambda handler")
 	lambda.StartWithOptions(func(ctx context.Context, event *events.SQSEvent) (*SQSBatchResponse, error) {
 		resp := &SQSBatchResponse{
 			BatchItemFailures: nil,
 		}
 		for _, record := range event.Records {
+			if record.MessageId == "" {
+				return nil, errors.New("sqs message id is empty")
+			}
 			if err := processEvent(ctx, record.MessageId, record.Body); err != nil {
 				resp.BatchItemFailures = append(resp.BatchItemFailures, BatchItemFailureItem{
 					ItemIdentifier: record.MessageId,
@@ -276,6 +280,6 @@ func runLambdaHandler(ctx context.Context) error {
 			}
 		}
 		return resp, nil
-	}, lambda.WithContext(ctx))
+	})
 	return nil
 }
