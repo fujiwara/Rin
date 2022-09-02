@@ -6,20 +6,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/endpoints"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
 
 	rin "github.com/fujiwara/Rin"
 )
 
 const (
-	SQSEndpoint      = "http://localhost:4576"
-	S3Endpoint       = "http://localhost:4572"
-	RedshiftEndpoint = "http://localhost:4577"
+	SQSEndpoint      = "http://localhost:4566"
+	S3Endpoint       = "http://localhost:4566"
+	RedshiftEndpoint = "http://localhost:4566"
 )
 
 var message = `{
@@ -40,17 +39,45 @@ var message = `{
 }`
 
 var sessions = &rin.SessionStore{
-	SQS: session.Must(session.NewSession(&aws.Config{
-		Credentials: credentials.NewStaticCredentials("foo", "var", ""),
-		Region:      aws.String(endpoints.ApNortheast1RegionID),
-		Endpoint:    aws.String(SQSEndpoint),
-	})),
-	S3: session.Must(session.NewSession(&aws.Config{
-		Credentials:      credentials.NewStaticCredentials("foo", "var", ""),
-		S3ForcePathStyle: aws.Bool(true),
-		Region:           aws.String(endpoints.ApNortheast1RegionID),
-		Endpoint:         aws.String(S3Endpoint),
-	})),
+	SQS: &aws.Config{
+		Credentials: credentials.StaticCredentialsProvider{
+			Value: aws.Credentials{
+				AccessKeyID:     "foo",
+				SecretAccessKey: "var",
+				SessionToken:    "",
+			},
+		},
+		Region: "ap-northeast-1",
+		EndpointResolverWithOptions: aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
+			return aws.Endpoint{
+				PartitionID:   "aws",
+				URL:           SQSEndpoint,
+				SigningRegion: "ap-northeast-1",
+			}, nil
+		}),
+	},
+	S3: &aws.Config{
+		Credentials: credentials.StaticCredentialsProvider{
+			Value: aws.Credentials{
+				AccessKeyID:     "foo",
+				SecretAccessKey: "var",
+				SessionToken:    "",
+			},
+		},
+		Region: "ap-northeast-1",
+		EndpointResolverWithOptions: aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
+			return aws.Endpoint{
+				PartitionID:   "aws",
+				URL:           S3Endpoint,
+				SigningRegion: "ap-northeast-1",
+			}, nil
+		}),
+	},
+	S3OptFns: []func(o *s3.Options){
+		func(o *s3.Options) {
+			o.UsePathStyle = true
+		},
+	},
 }
 
 func TestLocalStack(t *testing.T) {
@@ -73,13 +100,16 @@ func TestLocalStack(t *testing.T) {
 }
 
 func setupS3(t *testing.T) func() {
-	svc := s3.New(sessions.S3)
+	svc := s3.NewFromConfig(*sessions.S3, sessions.S3OptFns...)
 
 	bucket := aws.String("rin-test")
 	key := aws.String("localstack.yml")
 
-	_, err := svc.CreateBucket(&s3.CreateBucketInput{
+	_, err := svc.CreateBucket(context.Background(), &s3.CreateBucketInput{
 		Bucket: bucket,
+		CreateBucketConfiguration: &types.CreateBucketConfiguration{
+			LocationConstraint: types.BucketLocationConstraintApNortheast1,
+		},
 	})
 	if err != nil {
 		t.Error(err)
@@ -89,7 +119,7 @@ func setupS3(t *testing.T) func() {
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = svc.PutObject(&s3.PutObjectInput{
+	_, err = svc.PutObject(context.Background(), &s3.PutObjectInput{
 		Bucket: bucket,
 		Key:    key,
 		Body:   f,
@@ -99,19 +129,19 @@ func setupS3(t *testing.T) func() {
 	}
 
 	return func() {
-		svc.DeleteObject(&s3.DeleteObjectInput{
+		svc.DeleteObject(context.Background(), &s3.DeleteObjectInput{
 			Bucket: bucket,
 			Key:    key,
 		})
-		svc.DeleteBucket(&s3.DeleteBucketInput{
+		svc.DeleteBucket(context.Background(), &s3.DeleteBucketInput{
 			Bucket: bucket,
 		})
 	}
 }
 
 func setupSQS(t *testing.T) func() {
-	svc := sqs.New(sessions.SQS)
-	r, err := svc.CreateQueue(&sqs.CreateQueueInput{
+	svc := sqs.NewFromConfig(*sessions.SQS, sessions.SQSOptFns...)
+	r, err := svc.CreateQueue(context.Background(), &sqs.CreateQueueInput{
 		QueueName: aws.String("rin_test"),
 	})
 	if err != nil {
@@ -119,7 +149,7 @@ func setupSQS(t *testing.T) func() {
 	}
 
 	for i := 0; i < 2; i++ {
-		if _, err := svc.SendMessage(&sqs.SendMessageInput{
+		if _, err := svc.SendMessage(context.Background(), &sqs.SendMessageInput{
 			MessageBody: aws.String(message),
 			QueueUrl:    r.QueueUrl,
 		}); err != nil {
@@ -127,7 +157,7 @@ func setupSQS(t *testing.T) func() {
 		}
 	}
 	return func() {
-		svc.DeleteQueue(&sqs.DeleteQueueInput{
+		svc.DeleteQueue(context.Background(), &sqs.DeleteQueueInput{
 			QueueUrl: r.QueueUrl,
 		})
 	}

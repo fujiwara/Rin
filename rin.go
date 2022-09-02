@@ -13,10 +13,13 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/sqs"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	awsConfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/redshift"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
 )
 
 var config *Config
@@ -24,9 +27,12 @@ var MaxDeleteRetry = 8
 var Sessions = &SessionStore{}
 
 type SessionStore struct {
-	SQS      *session.Session
-	Redshift *session.Session
-	S3       *session.Session
+	SQS            *aws.Config
+	SQSOptFns      []func(*sqs.Options)
+	Redshift       *aws.Config
+	RedshiftOptFns []func(*redshift.Options)
+	S3             *aws.Config
+	S3OptFns       []func(*s3.Options)
 }
 
 var TrapSignals = []os.Signal{
@@ -73,26 +79,35 @@ func RunWithContext(ctx context.Context, configFile string, batchMode bool) erro
 	}
 
 	if Sessions.SQS == nil {
-		c := &aws.Config{
-			Region: aws.String(config.Credentials.AWS_REGION),
+		opts := []func(*awsConfig.LoadOptions) error{
+			awsConfig.WithRegion(config.Credentials.AWS_REGION),
 		}
 		if config.Credentials.AWS_ACCESS_KEY_ID != "" {
-			c.Credentials = credentials.NewStaticCredentials(
-				config.Credentials.AWS_ACCESS_KEY_ID,
-				config.Credentials.AWS_SECRET_ACCESS_KEY,
-				"",
-			)
+			opts = append(opts, awsConfig.WithCredentialsProvider(credentials.StaticCredentialsProvider{
+				Value: aws.Credentials{
+					AccessKeyID:     config.Credentials.AWS_ACCESS_KEY_ID,
+					SecretAccessKey: config.Credentials.AWS_SECRET_ACCESS_KEY,
+					Source:          "from Rin config",
+				},
+			}))
 		}
-		sess := session.Must(session.NewSession(c))
-		Sessions.SQS = sess
-		Sessions.Redshift = sess
-		Sessions.S3 = sess
+		c, err := awsConfig.LoadDefaultConfig(ctx, opts...)
+		if err != nil {
+			return err
+		}
+		Sessions.SQS = &c
+		Sessions.SQSOptFns = make([]func(*sqs.Options), 0)
+		Sessions.Redshift = &c
+		Sessions.RedshiftOptFns = make([]func(*redshift.Options), 0)
+		Sessions.S3 = &c
+		Sessions.S3OptFns = make([]func(*s3.Options), 0)
 	}
-	sqsSvc := sqs.New(Sessions.SQS)
+
 	if isLambda() {
 		return runLambdaHandler()
 	}
 
+	sqsSvc := sqs.NewFromConfig(*Sessions.SQS, Sessions.SQSOptFns...)
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, TrapSignals...)
 	ctx, cancel := context.WithCancel(ctx)
@@ -103,10 +118,13 @@ func RunWithContext(ctx context.Context, configFile string, batchMode bool) erro
 	// wait for signal
 	go func() {
 		defer wg.Done()
-		sig := <-signalCh
-		log.Printf("[info] Got signal: %s(%d)", sig, sig)
-		log.Println("[info] Shutting down worker...")
-		cancel()
+		select {
+		case sig := <-signalCh:
+			log.Printf("[info] Got signal: %s(%d)", sig, sig)
+			log.Println("[info] Shutting down worker...")
+			cancel()
+		case <-ctx.Done():
+		}
 	}()
 
 	// run worker
@@ -130,7 +148,7 @@ func waitForRetry() {
 	time.Sleep(10 * time.Second)
 }
 
-func sqsWorker(ctx context.Context, wg *sync.WaitGroup, svc *sqs.SQS, batchMode bool) error {
+func sqsWorker(ctx context.Context, wg *sync.WaitGroup, svc *sqs.Client, batchMode bool) error {
 	var mode string
 	if batchMode {
 		mode = "Batch"
@@ -142,7 +160,7 @@ func sqsWorker(ctx context.Context, wg *sync.WaitGroup, svc *sqs.SQS, batchMode 
 	defer wg.Done()
 
 	log.Println("[info] Connect to SQS:", config.QueueName)
-	res, err := svc.GetQueueUrlWithContext(ctx, &sqs.GetQueueUrlInput{
+	res, err := svc.GetQueueUrl(ctx, &sqs.GetQueueUrlInput{
 		QueueName: aws.String(config.QueueName),
 	})
 	if err != nil {
@@ -158,25 +176,18 @@ func sqsWorker(ctx context.Context, wg *sync.WaitGroup, svc *sqs.SQS, batchMode 
 			if _, ok := err.(NoMessageError); ok {
 				if batchMode {
 					break
-				} else {
-					continue
 				}
-				if ctx.Err() == context.Canceled {
-					return nil
-				}
-				if !batchMode {
-					waitForRetry()
-				}
+				time.Sleep(100 * time.Millisecond)
 			}
 		}
 	}
 	return nil
 }
 
-func handleMessage(ctx context.Context, svc *sqs.SQS, queueUrl *string) error {
+func handleMessage(ctx context.Context, svc *sqs.Client, queueUrl *string) error {
 	var completed = false
-	res, err := svc.ReceiveMessageWithContext(ctx, &sqs.ReceiveMessageInput{
-		MaxNumberOfMessages: aws.Int64(1),
+	res, err := svc.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
+		MaxNumberOfMessages: 1,
 		QueueUrl:            queueUrl,
 	})
 	if err != nil {
@@ -200,8 +211,7 @@ func handleMessage(ctx context.Context, svc *sqs.SQS, queueUrl *string) error {
 	if err := processEvent(ctx, msgId, *msg.Body); err != nil {
 		return err
 	}
-
-	_, err = svc.DeleteMessage(&sqs.DeleteMessageInput{
+	_, err = svc.DeleteMessage(context.Background(), &sqs.DeleteMessageInput{
 		QueueUrl:      queueUrl,
 		ReceiptHandle: msg.ReceiptHandle,
 	})
@@ -211,7 +221,7 @@ func handleMessage(ctx context.Context, svc *sqs.SQS, queueUrl *string) error {
 		for i := 1; i <= MaxDeleteRetry; i++ {
 			log.Printf("[info] [%s] Retry to delete after %d sec.", msgId, i*i)
 			time.Sleep(time.Duration(i*i) * time.Second)
-			_, err = svc.DeleteMessage(&sqs.DeleteMessageInput{
+			_, err = svc.DeleteMessage(context.Background(), &sqs.DeleteMessageInput{
 				QueueUrl:      queueUrl,
 				ReceiptHandle: msg.ReceiptHandle,
 			})

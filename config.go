@@ -1,6 +1,7 @@
 package rin
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -10,10 +11,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	awsConfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/lib/pq"
 
 	goconfig "github.com/kayac/go-config"
@@ -233,21 +234,37 @@ func fetchHTTP(u *url.URL) ([]byte, error) {
 
 func fetchS3(u *url.URL) ([]byte, error) {
 	log.Println("[info] fetching from", u)
-	sess := Sessions.S3
-	if sess == nil {
-		sess = session.Must(session.NewSession())
+	ctx := context.Background()
+	var s3Svc *s3.Client
+	if Sessions.S3 == nil {
+		awsCfg, err := awsConfig.LoadDefaultConfig(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load default aws config, %w", err)
+		}
+		s3Svc = s3.NewFromConfig(awsCfg)
+	} else {
+		s3Svc = s3.NewFromConfig(*Sessions.S3, Sessions.S3OptFns...)
 	}
-	downloader := s3manager.NewDownloader(sess)
-
-	buf := &aws.WriteAtBuffer{}
-	_, err := downloader.Download(buf, &s3.GetObjectInput{
-		Bucket: aws.String(u.Host),
-		Key:    aws.String(u.Path),
+	bucket := u.Host
+	key := strings.TrimLeft(u.Path, "/")
+	headObject, err := s3Svc.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to head object from S3, %w", err)
+	}
+	buf := make([]byte, int(headObject.ContentLength))
+	w := manager.NewWriteAtBuffer(buf)
+	downloader := manager.NewDownloader(s3Svc)
+	_, err = downloader.Download(ctx, w, &s3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch from S3, %s", err)
 	}
-	return buf.Bytes(), nil
+	return buf, nil
 }
 
 func LoadConfig(path string) (*Config, error) {

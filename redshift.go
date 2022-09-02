@@ -1,21 +1,29 @@
 package rin
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"strings"
 	"sync"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/redshift"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/redshift"
 	_ "github.com/lib/pq"
 )
 
 var (
 	DBPool      = make(map[string]*sql.DB, 0)
 	DBPoolMutex sync.Mutex
-	redshiftSvc *redshift.Redshift
+	redshiftSvc *redshift.Client
 )
+
+func BoolValue(b *bool) bool {
+	if b != nil {
+		return *b
+	}
+	return false
+}
 
 func Import(event Event) (int, error) {
 	var processed int
@@ -29,7 +37,7 @@ func Import(event Event) (int, error) {
 				}
 				err := ImportRedshift(target, record, cap)
 				if err != nil {
-					if aws.BoolValue(config.Redshift.ReconnectOnError) {
+					if BoolValue(config.Redshift.ReconnectOnError) {
 						DisconnectToRedshift(target)
 					}
 					return processed, err
@@ -78,11 +86,11 @@ func ConnectToRedshift(target *Target) (*sql.DB, error) {
 	var user, password = r.User, r.Password
 	if password == "" {
 		if redshiftSvc == nil {
-			redshiftSvc = redshift.New(Sessions.Redshift)
+			redshiftSvc = redshift.NewFromConfig(*Sessions.Redshift, Sessions.RedshiftOptFns...)
 		}
 		id := strings.SplitN(r.Host, ".", 2)[0]
 		log.Printf("[info] Getting cluster credentials for %s user %s", r.Host, r.User)
-		res, err := redshiftSvc.GetClusterCredentials(&redshift.GetClusterCredentialsInput{
+		res, err := redshiftSvc.GetClusterCredentials(context.Background(), &redshift.GetClusterCredentialsInput{
 			ClusterIdentifier: aws.String(id),
 			DbUser:            aws.String(r.User),
 		})
