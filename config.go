@@ -204,7 +204,7 @@ func (r Redshift) String() string {
 	}
 }
 
-func loadSrcFrom(path string) ([]byte, error) {
+func loadSrcFrom(ctx context.Context, path string) ([]byte, error) {
 	u, err := url.Parse(path)
 	if err != nil {
 		// not a URL. load as a file path
@@ -212,9 +212,9 @@ func loadSrcFrom(path string) ([]byte, error) {
 	}
 	switch u.Scheme {
 	case "http", "https":
-		return fetchHTTP(u)
+		return fetchHTTP(ctx, u)
 	case "s3":
-		return fetchS3(u)
+		return fetchS3(ctx, u)
 	case "file", "":
 		return ioutil.ReadFile(u.Path)
 	default:
@@ -222,9 +222,13 @@ func loadSrcFrom(path string) ([]byte, error) {
 	}
 }
 
-func fetchHTTP(u *url.URL) ([]byte, error) {
+func fetchHTTP(ctx context.Context, u *url.URL) ([]byte, error) {
 	log.Println("[info] fetching from", u)
-	resp, err := http.Get(u.String())
+	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -232,9 +236,8 @@ func fetchHTTP(u *url.URL) ([]byte, error) {
 	return ioutil.ReadAll(resp.Body)
 }
 
-func fetchS3(u *url.URL) ([]byte, error) {
+func fetchS3(ctx context.Context, u *url.URL) ([]byte, error) {
 	log.Println("[info] fetching from", u)
-	ctx := context.Background()
 	var s3Svc *s3.Client
 	if Sessions.S3 == nil {
 		awsCfg, err := awsConfig.LoadDefaultConfig(ctx)
@@ -267,8 +270,8 @@ func fetchS3(u *url.URL) ([]byte, error) {
 	return buf, nil
 }
 
-func LoadConfig(path string) (*Config, error) {
-	src, err := loadSrcFrom(path)
+func LoadConfig(ctx context.Context, path string) (*Config, error) {
+	src, err := loadSrcFrom(ctx, path)
 	if err != nil {
 		return nil, err
 	}

@@ -51,9 +51,10 @@ func (e NoMessageError) Error() string {
 }
 
 func DryRun(configFile string, batchMode bool) error {
+	ctx := context.TODO()
 	var err error
 	log.Println("[info] Loading config:", configFile)
-	config, err = LoadConfig(configFile)
+	config, err = LoadConfig(ctx, configFile)
 	if err != nil {
 		return err
 	}
@@ -64,13 +65,13 @@ func DryRun(configFile string, batchMode bool) error {
 }
 
 func Run(configFile string, batchMode bool) error {
-	return RunWithContext(context.Background(), configFile, batchMode)
+	return RunWithContext(context.TODO(), configFile, batchMode)
 }
 
 func RunWithContext(ctx context.Context, configFile string, batchMode bool) error {
 	var err error
 	log.Println("[info] Loading config:", configFile)
-	config, err = LoadConfig(configFile)
+	config, err = LoadConfig(ctx, configFile)
 	if err != nil {
 		return err
 	}
@@ -143,11 +144,6 @@ func isLambda() bool {
 	return strings.HasPrefix(os.Getenv("AWS_EXECUTION_ENV"), "AWS_Lambda") || os.Getenv("AWS_LAMBDA_RUNTIME_API") != ""
 }
 
-func waitForRetry() {
-	log.Println("[warn] Retry after 10 sec.")
-	time.Sleep(10 * time.Second)
-}
-
 func sqsWorker(ctx context.Context, wg *sync.WaitGroup, svc *sqs.Client, batchMode bool) error {
 	var mode string
 	if batchMode {
@@ -211,7 +207,10 @@ func handleMessage(ctx context.Context, svc *sqs.Client, queueUrl *string) error
 	if err := processEvent(ctx, msgId, *msg.Body); err != nil {
 		return err
 	}
-	_, err = svc.DeleteMessage(context.Background(), &sqs.DeleteMessageInput{
+
+	ctxDelete, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	_, err = svc.DeleteMessage(ctxDelete, &sqs.DeleteMessageInput{
 		QueueUrl:      queueUrl,
 		ReceiptHandle: msg.ReceiptHandle,
 	})
@@ -251,7 +250,7 @@ func processEvent(ctx context.Context, msgId string, body string) error {
 		log.Printf("[info] [%s] Skipping %s", msgId, event.String())
 	} else {
 		log.Printf("[info] [%s] Importing event: %s", msgId, event)
-		n, err := Import(event)
+		n, err := Import(ctx, event)
 		if err != nil {
 			log.Printf("[error] [%s] Import failed. %s", msgId, err)
 			return err
