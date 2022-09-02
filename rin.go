@@ -51,10 +51,7 @@ func (e NoMessageError) Error() string {
 }
 
 func DryRun(configFile string, batchMode bool) error {
-	return DryRunWithContext(context.Background(), configFile, batchMode)
-}
-
-func DryRunWithContext(ctx context.Context, configFile string, batchMode bool) error {
+	ctx := context.TODO()
 	var err error
 	log.Println("[info] Loading config:", configFile)
 	config, err = LoadConfig(ctx, configFile)
@@ -68,7 +65,7 @@ func DryRunWithContext(ctx context.Context, configFile string, batchMode bool) e
 }
 
 func Run(configFile string, batchMode bool) error {
-	return RunWithContext(context.Background(), configFile, batchMode)
+	return RunWithContext(context.TODO(), configFile, batchMode)
 }
 
 func RunWithContext(ctx context.Context, configFile string, batchMode bool) error {
