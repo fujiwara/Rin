@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	rin "github.com/fujiwara/Rin"
 	"github.com/hashicorp/logutils"
@@ -61,11 +64,18 @@ func main() {
 	log.SetOutput(filter)
 	log.Println("[info] rin version:", version)
 
-	run := rin.Run
+	ctx, stop := signal.NotifyContext(
+		context.Background(),
+		os.Interrupt,
+		syscall.SIGTERM,
+	)
+	defer stop()
+
+	run := rin.RunWithContext
 	if dryRun {
-		run = rin.DryRun
+		run = rin.DryRunWithContext
 	}
-	if err := run(config, batchMode); err != nil {
+	if err := run(ctx, config, batchMode); err != nil {
 		log.Println("[error]", err)
 		os.Exit(1)
 	}
