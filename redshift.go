@@ -25,7 +25,7 @@ func BoolValue(b *bool) bool {
 	return false
 }
 
-func Import(event Event) (int, error) {
+func Import(ctx context.Context, event Event) (int, error) {
 	var processed int
 	for _, record := range event.Records {
 	TARGETS:
@@ -35,7 +35,7 @@ func Import(event Event) (int, error) {
 					processed++
 					break TARGETS
 				}
-				err := ImportRedshift(target, record, cap)
+				err := ImportRedshift(ctx, target, record, cap)
 				if err != nil {
 					if BoolValue(config.Redshift.ReconnectOnError) {
 						DisconnectToRedshift(target)
@@ -67,7 +67,7 @@ func DisconnectToRedshift(target *Target) {
 	delete(DBPool, dsn)
 }
 
-func ConnectToRedshift(target *Target) (*sql.DB, error) {
+func ConnectToRedshift(ctx context.Context, target *Target) (*sql.DB, error) {
 	r := target.Redshift
 	dsn := r.DSN()
 
@@ -90,7 +90,7 @@ func ConnectToRedshift(target *Target) (*sql.DB, error) {
 		}
 		id := strings.SplitN(r.Host, ".", 2)[0]
 		log.Printf("[info] Getting cluster credentials for %s user %s", r.Host, r.User)
-		res, err := redshiftSvc.GetClusterCredentials(context.Background(), &redshift.GetClusterCredentialsInput{
+		res, err := redshiftSvc.GetClusterCredentials(ctx, &redshift.GetClusterCredentialsInput{
 			ClusterIdentifier: aws.String(id),
 			DbUser:            aws.String(r.User),
 		})
@@ -109,9 +109,9 @@ func ConnectToRedshift(target *Target) (*sql.DB, error) {
 	return db, nil
 }
 
-func ImportRedshift(target *Target, record *EventRecord, cap *[]string) error {
+func ImportRedshift(ctx context.Context, target *Target, record *EventRecord, cap *[]string) error {
 	log.Printf("[info] Import to target %s from record %s", target, record)
-	db, err := ConnectToRedshift(target)
+	db, err := ConnectToRedshift(ctx, target)
 	if err != nil {
 		return err
 	}

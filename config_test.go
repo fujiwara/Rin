@@ -1,6 +1,7 @@
 package rin_test
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -70,8 +71,9 @@ var ExpectedIAMRole = [][]string{
 }
 
 func TestLoadConfigError(t *testing.T) {
+	ctx := context.Background()
 	for _, f := range BrokenConfig {
-		_, err := rin.LoadConfig(f)
+		_, err := rin.LoadConfig(ctx, f)
 		if err == nil {
 			t.Errorf("LoadConfig(%s) must be failed", f)
 		}
@@ -86,7 +88,8 @@ func TestLoadConfig(t *testing.T) {
 }
 
 func testConfig(t *testing.T, name string, expected [][]string) {
-	config, err := rin.LoadConfig(name)
+	ctx := context.Background()
+	config, err := rin.LoadConfig(ctx, name)
 	if err != nil {
 		t.Fatalf("load config failed: %s", err)
 	}
