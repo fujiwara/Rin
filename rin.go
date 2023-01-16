@@ -18,8 +18,11 @@ import (
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/redshift"
+	"github.com/aws/aws-sdk-go-v2/service/redshiftdata"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
+
+	redshiftdatasqldriver "github.com/mashiike/redshift-data-sql-driver"
 )
 
 var config *Config
@@ -102,6 +105,10 @@ func RunWithContext(ctx context.Context, configFile string, batchMode bool) erro
 		Sessions.RedshiftOptFns = make([]func(*redshift.Options), 0)
 		Sessions.S3 = &c
 		Sessions.S3OptFns = make([]func(*s3.Options), 0)
+
+		redshiftdatasqldriver.RedshiftDataClientConstructor = func(ctx context.Context, cfg *redshiftdatasqldriver.RedshiftDataConfig) (redshiftdatasqldriver.RedshiftDataClient, error) {
+			return redshiftdata.NewFromConfig(c, cfg.RedshiftDataOptFns...), nil
+		}
 	}
 
 	if isLambda() {
