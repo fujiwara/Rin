@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/redshift"
 	_ "github.com/lib/pq"
+	_ "github.com/mashiike/redshift-data-sql-driver"
 )
 
 var (
@@ -101,7 +102,7 @@ func ConnectToRedshift(ctx context.Context, target *Target) (*sql.DB, error) {
 		log.Printf("[debug] Got user %s password %s", user, password)
 	}
 
-	db, err := sql.Open("postgres", r.DSNWith(user, password))
+	db, err := sql.Open(r.Driver, r.DSNWith(user, password))
 	if err != nil {
 		return nil, err
 	}

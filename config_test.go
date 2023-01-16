@@ -16,6 +16,7 @@ var BrokenConfig = []string{
 
 type testExpected struct {
 	targets    []testTarget
+	Driver     string
 	DSN        string
 	VisibleDSN string
 }
@@ -29,6 +30,7 @@ type testTarget struct {
 var Expected = testExpected{
 	DSN:        "postgres://test_user:test_pass@localhost:5432/test",
 	VisibleDSN: "redshift://test_user:****@localhost:5432/test",
+	Driver:     "postgres",
 	targets: []testTarget{
 		{
 			"test.bucket.test",
@@ -61,6 +63,40 @@ var Expected = testExpected{
 var ExpectedIAMRole = testExpected{
 	DSN:        "postgres://test_user:test_pass@localhost:5432/test",
 	VisibleDSN: "redshift://test_user:****@localhost:5432/test",
+	Driver:     "postgres",
+	targets: []testTarget{
+		{
+			"test.bucket.test",
+			"test/foo/xxx.json",
+			`/* Rin */ COPY "foo" FROM 's3://test.bucket.test/test/foo/xxx.json' CREDENTIALS 'aws_iam_role=arn:aws:iam::123456789012:role/rin' REGION 'ap-northeast-1' JSON 'auto' GZIP`,
+		},
+		{
+			"test.bucket.test",
+			"test/foo/discard/xxx.json",
+			"",
+		},
+		{
+			"test.bucket.test",
+			"test/bar/break",
+			`/* Rin */ COPY "xxx"."bar_break" FROM 's3://test.bucket.test/test/bar/break' CREDENTIALS 'aws_iam_role=arn:aws:iam::123456789012:role/rin' REGION 'ap-northeast-1' CSV DELIMITER ',' ESCAPE`,
+		},
+		{
+			"test.bucket.test",
+			"test/bar/y's.csv",
+			`/* Rin */ COPY "xxx"."bar" FROM 's3://test.bucket.test/test/bar/y''s.csv' CREDENTIALS 'aws_iam_role=arn:aws:iam::123456789012:role/rin' REGION 'ap-northeast-1' CSV DELIMITER ',' ESCAPE`,
+		},
+		{
+			"example.bucket",
+			"test/s1/t256/aaa.json",
+			`/* Rin */ COPY "s1"."t256" FROM 's3://example.bucket/test/s1/t256/aaa.json' CREDENTIALS 'aws_iam_role=arn:aws:iam::123456789012:role/rin' REGION 'ap-northeast-1' JSON 'auto' GZIP`,
+		},
+	},
+}
+
+var ExpectedRedshiftData = testExpected{
+	DSN:        "test_user@cluster(mycluster)/test",
+	VisibleDSN: "test_user@cluster(mycluster)/test",
+	Driver:     "redshift-data",
 	targets: []testTarget{
 		{
 			"test.bucket.test",
@@ -104,7 +140,8 @@ func TestLoadConfigError(t *testing.T) {
 func TestLoadConfig(t *testing.T) {
 	os.Setenv("AWS_SECRET_ACCESS_KEY", "SSS")
 	testConfig(t, "test/config.yml", Expected)
-	testConfig(t, "test/config.yml.iam_role", ExpectedIAMRole)
+	testConfig(t, "test/config.iam_role.yml", ExpectedIAMRole)
+	testConfig(t, "test/config.redshift-data.yml", ExpectedRedshiftData)
 }
 
 func testConfig(t *testing.T, name string, expected testExpected) {
@@ -123,6 +160,9 @@ func testConfig(t *testing.T, name string, expected testExpected) {
 	}
 	if expected.VisibleDSN != config.Redshift.VisibleDSN() {
 		t.Errorf("invalid VisibleDSN expected %s got %s", expected.VisibleDSN, config.Redshift.VisibleDSN())
+	}
+	if expected.Driver != config.Redshift.Driver {
+		t.Errorf("invalid Driver expected %s got %s", expected.Driver, config.Redshift.Driver)
 	}
 
 	for _, e := range expected.targets {
