@@ -14,7 +14,13 @@ var BrokenConfig = []string{
 	"test/config.yml.not_found",
 }
 
-var Expected = [][]string{
+type testExpected struct {
+	Bucket string
+	Key    string
+	SQL    string
+}
+
+var Expected = []testExpected{
 	{
 		"test.bucket.test",
 		"test/foo/xxx.json",
@@ -42,7 +48,7 @@ var Expected = [][]string{
 	},
 }
 
-var ExpectedIAMRole = [][]string{
+var ExpectedIAMRole = []testExpected{
 	{
 		"test.bucket.test",
 		"test/foo/xxx.json",
@@ -87,7 +93,7 @@ func TestLoadConfig(t *testing.T) {
 	testConfig(t, "test/config.yml.iam_role", ExpectedIAMRole)
 }
 
-func testConfig(t *testing.T, name string, expected [][]string) {
+func testConfig(t *testing.T, name string, expected []testExpected) {
 	ctx := context.Background()
 	config, err := rin.LoadConfig(ctx, name)
 	if err != nil {
@@ -98,36 +104,34 @@ func testConfig(t *testing.T, name string, expected [][]string) {
 		t.Error("invalid targets len", len(config.Targets))
 	}
 	for _, e := range expected {
-		bucket := e[0]
-		key := e[1]
 		var sql string
 		var err error
 		for i, target := range config.Targets {
-			ok, cap := target.Match(bucket, key)
+			ok, cap := target.Match(e.Bucket, e.Key)
 			if !ok {
 				continue
 			}
 			if target.Discard {
-				t.Log("discard", key, "target", i)
+				t.Log("discard", e.Key, "target", i)
 				break
 			} else {
-				t.Log("build", key, "target", i)
-				sql, err = target.BuildCopySQL(key, config.Credentials, cap)
+				t.Log("build", e.Key, "target", i)
+				sql, err = target.BuildCopySQL(e.Key, config.Credentials, cap)
 				if err != nil {
 					t.Error(err)
 				}
 				//t.Log(sql)
 			}
 			if target.Break {
-				t.Log("break", key, "target", i)
+				t.Log("break", e.Key, "target", i)
 				break
 			}
 			if !rin.BoolValue(target.Redshift.ReconnectOnError) {
 				t.Error("reconnect_on_error must be true")
 			}
 		}
-		if sql != e[2] {
-			t.Errorf("unexpected SQL:\nExpected:%s\nGot:%s", e[2], sql)
+		if sql != e.SQL {
+			t.Errorf("unexpected SQL:\nExpected:%s\nGot:%s", e.SQL, sql)
 		}
 	}
 }
