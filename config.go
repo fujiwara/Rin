@@ -188,6 +188,12 @@ type Redshift struct {
 	ReconnectOnError *bool  `yaml:"reconnect_on_error"`
 }
 
+func (r Redshift) UseTransaction() bool {
+	// redshift-data driver does not support transaction
+	// https://github.com/mashiike/redshift-data-sql-driver#unsupported-features
+	return r.Driver == DriverPostgres
+}
+
 func (r Redshift) DSN() string {
 	return r.DSNWith(r.User, r.Password)
 }
@@ -228,7 +234,7 @@ func (r Redshift) VisibleDSN() string {
 	if r.Driver == DriverPostgres {
 		return strings.Replace(r.DSNWith(r.User, ""), "postgres://", "redshift://", 1)
 	} else {
-		return r.DSN()
+		return r.Driver + "://" + r.DSN()
 	}
 }
 

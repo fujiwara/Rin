@@ -95,7 +95,7 @@ var ExpectedIAMRole = testExpected{
 
 var ExpectedRedshiftData = testExpected{
 	DSN:        "test_user@cluster(mycluster)/test",
-	VisibleDSN: "test_user@cluster(mycluster)/test",
+	VisibleDSN: "redshift-data://test_user@cluster(mycluster)/test",
 	Driver:     "redshift-data",
 	targets: []testTarget{
 		{

@@ -111,6 +111,14 @@ func (target *Target) ConnectToRedshift(ctx context.Context) (*sql.DB, error) {
 }
 
 func (target *Target) ImportRedshift(ctx context.Context, record *EventRecord, cap *[]string) error {
+	if config.Redshift.UseTransaction() {
+		return target.importRedshiftWithTx(ctx, record, cap)
+	} else {
+		return target.importRedshiftWithoutTx(ctx, record, cap)
+	}
+}
+
+func (target *Target) importRedshiftWithTx(ctx context.Context, record *EventRecord, cap *[]string) error {
 	log.Printf("[info] Import to target %s from record %s", target, record)
 	db, err := target.ConnectToRedshift(ctx)
 	if err != nil {
@@ -142,5 +150,25 @@ func (target *Target) ImportRedshift(ctx context.Context, record *EventRecord, c
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func (target *Target) importRedshiftWithoutTx(ctx context.Context, record *EventRecord, cap *[]string) error {
+	log.Printf("[info] Import to target %s from record %s", target, record)
+	db, err := target.ConnectToRedshift(ctx)
+	if err != nil {
+		return err
+	}
+
+	query, err := target.BuildCopySQL(record.S3.Object.Key, config.Credentials, cap)
+	if err != nil {
+		return err
+	}
+	log.Println("[debug] SQL:", query)
+
+	if _, err := db.ExecContext(ctx, query); err != nil {
+		return err
+	}
+
 	return nil
 }
