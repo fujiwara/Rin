@@ -336,6 +336,7 @@ func LoadConfig(ctx context.Context, path string) (*Config, error) {
 func (c *Config) validate() error {
 	switch c.Redshift.Driver {
 	case DriverPostgres, DriverRedshiftData: // ok
+		log.Println("[debug] redshift.driver is", c.Redshift.Driver)
 	default:
 		return fmt.Errorf("invalid redshift.driver must be %s or %s", DriverPostgres, DriverRedshiftData)
 	}
@@ -384,6 +385,15 @@ func (c *Config) merge() error {
 			}
 			if tr.ReconnectOnError == nil {
 				tr.ReconnectOnError = cr.ReconnectOnError
+			}
+			if tr.Driver == "" {
+				tr.Driver = cr.Driver
+			}
+			if tr.Workgroup == "" {
+				tr.Workgroup = cr.Workgroup
+			}
+			if tr.Cluster == "" {
+				tr.Cluster = cr.Cluster
 			}
 		}
 
