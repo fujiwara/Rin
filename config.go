@@ -176,10 +176,7 @@ type Redshift struct {
 }
 
 func (r Redshift) DSN() string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s",
-		url.QueryEscape(r.User), url.QueryEscape(r.Password),
-		url.QueryEscape(r.Host), r.Port, url.QueryEscape(r.DBName),
-	)
+	return r.DSNWith(r.User, r.Password)
 }
 
 func (r Redshift) DSNWith(user, password string) string {
