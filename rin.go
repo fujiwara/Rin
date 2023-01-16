@@ -13,6 +13,7 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	redshiftdatasqldriver "github.com/mashiike/redshift-data-sql-driver"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
@@ -21,13 +22,18 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/redshiftdata"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
-
-	redshiftdatasqldriver "github.com/mashiike/redshift-data-sql-driver"
 )
 
 var config *Config
 var MaxDeleteRetry = 8
-var Sessions = &SessionStore{}
+var Sessions *SessionStore
+
+func init() {
+	Sessions = &SessionStore{}
+	redshiftdatasqldriver.RedshiftDataClientConstructor = func(ctx context.Context, cfg *redshiftdatasqldriver.RedshiftDataConfig) (redshiftdatasqldriver.RedshiftDataClient, error) {
+		return redshiftdata.NewFromConfig(*Sessions.Redshift, cfg.RedshiftDataOptFns...), nil
+	}
+}
 
 type SessionStore struct {
 	SQS            *aws.Config
@@ -105,10 +111,6 @@ func RunWithContext(ctx context.Context, configFile string, batchMode bool) erro
 		Sessions.RedshiftOptFns = make([]func(*redshift.Options), 0)
 		Sessions.S3 = &c
 		Sessions.S3OptFns = make([]func(*s3.Options), 0)
-
-		redshiftdatasqldriver.RedshiftDataClientConstructor = func(ctx context.Context, cfg *redshiftdatasqldriver.RedshiftDataConfig) (redshiftdatasqldriver.RedshiftDataClient, error) {
-			return redshiftdata.NewFromConfig(c, cfg.RedshiftDataOptFns...), nil
-		}
 	}
 
 	if isLambda() {
