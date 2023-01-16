@@ -36,10 +36,10 @@ func Import(ctx context.Context, event Event) (int, error) {
 					processed++
 					break TARGETS
 				}
-				err := ImportRedshift(ctx, target, record, cap)
+				err := target.ImportRedshift(ctx, record, cap)
 				if err != nil {
 					if BoolValue(config.Redshift.ReconnectOnError) {
-						DisconnectToRedshift(target)
+						target.DisconnectToRedshift()
 					}
 					return processed, err
 				} else {
@@ -54,7 +54,7 @@ func Import(ctx context.Context, event Event) (int, error) {
 	return processed, nil
 }
 
-func DisconnectToRedshift(target *Target) {
+func (target *Target) DisconnectToRedshift() {
 	r := target.Redshift
 	dsn := r.DSN()
 	log.Println("[info] Disconnect to Redshift", r.VisibleDSN())
@@ -68,7 +68,7 @@ func DisconnectToRedshift(target *Target) {
 	delete(DBPool, dsn)
 }
 
-func ConnectToRedshift(ctx context.Context, target *Target) (*sql.DB, error) {
+func (target *Target) ConnectToRedshift(ctx context.Context) (*sql.DB, error) {
 	r := target.Redshift
 	dsn := r.DSN()
 
@@ -110,9 +110,9 @@ func ConnectToRedshift(ctx context.Context, target *Target) (*sql.DB, error) {
 	return db, nil
 }
 
-func ImportRedshift(ctx context.Context, target *Target, record *EventRecord, cap *[]string) error {
+func (target *Target) ImportRedshift(ctx context.Context, record *EventRecord, cap *[]string) error {
 	log.Printf("[info] Import to target %s from record %s", target, record)
-	db, err := ConnectToRedshift(ctx, target)
+	db, err := target.ConnectToRedshift(ctx)
 	if err != nil {
 		return err
 	}
