@@ -167,7 +167,7 @@ func (target *Target) importRedshiftWithoutTx(ctx context.Context, record *Event
 	}
 	log.Println("[debug] SQL:", query)
 
-	if _, err := db.ExecContext(ctx, query); err != nil {
+	if _, err := db.Exec(query); err != nil {
 		return err
 	}
 
