@@ -85,7 +85,8 @@ func (target *Target) ConnectToRedshift(ctx context.Context) (*sql.DB, error) {
 	log.Println("[info] Connect to Redshift", r.VisibleDSN())
 
 	var user, password = r.User, r.Password
-	if password == "" {
+	// redshift-data driver creates a temporary credentials by itself
+	if password == "" && r.Driver != DriverRedshiftData {
 		if redshiftSvc == nil {
 			redshiftSvc = redshift.NewFromConfig(*Sessions.Redshift, Sessions.RedshiftOptFns...)
 		}
