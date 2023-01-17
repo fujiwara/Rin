@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/redshift"
 	_ "github.com/lib/pq"
+	_ "github.com/mashiike/redshift-data-sql-driver"
 )
 
 var (
@@ -35,10 +36,10 @@ func Import(ctx context.Context, event Event) (int, error) {
 					processed++
 					break TARGETS
 				}
-				err := ImportRedshift(ctx, target, record, cap)
+				err := target.ImportRedshift(ctx, record, cap)
 				if err != nil {
 					if BoolValue(config.Redshift.ReconnectOnError) {
-						DisconnectToRedshift(target)
+						target.DisconnectToRedshift()
 					}
 					return processed, err
 				} else {
@@ -53,7 +54,7 @@ func Import(ctx context.Context, event Event) (int, error) {
 	return processed, nil
 }
 
-func DisconnectToRedshift(target *Target) {
+func (target *Target) DisconnectToRedshift() {
 	r := target.Redshift
 	dsn := r.DSN()
 	log.Println("[info] Disconnect to Redshift", r.VisibleDSN())
@@ -67,7 +68,7 @@ func DisconnectToRedshift(target *Target) {
 	delete(DBPool, dsn)
 }
 
-func ConnectToRedshift(ctx context.Context, target *Target) (*sql.DB, error) {
+func (target *Target) ConnectToRedshift(ctx context.Context) (*sql.DB, error) {
 	r := target.Redshift
 	dsn := r.DSN()
 
@@ -84,7 +85,8 @@ func ConnectToRedshift(ctx context.Context, target *Target) (*sql.DB, error) {
 	log.Println("[info] Connect to Redshift", r.VisibleDSN())
 
 	var user, password = r.User, r.Password
-	if password == "" {
+	// redshift-data driver creates a temporary credentials by itself
+	if password == "" && r.Driver != DriverRedshiftData {
 		if redshiftSvc == nil {
 			redshiftSvc = redshift.NewFromConfig(*Sessions.Redshift, Sessions.RedshiftOptFns...)
 		}
@@ -101,7 +103,7 @@ func ConnectToRedshift(ctx context.Context, target *Target) (*sql.DB, error) {
 		log.Printf("[debug] Got user %s password %s", user, password)
 	}
 
-	db, err := sql.Open("postgres", r.DSNWith(user, password))
+	db, err := sql.Open(r.Driver, r.DSNWith(user, password))
 	if err != nil {
 		return nil, err
 	}
@@ -109,9 +111,17 @@ func ConnectToRedshift(ctx context.Context, target *Target) (*sql.DB, error) {
 	return db, nil
 }
 
-func ImportRedshift(ctx context.Context, target *Target, record *EventRecord, cap *[]string) error {
+func (target *Target) ImportRedshift(ctx context.Context, record *EventRecord, cap *[]string) error {
+	if config.Redshift.UseTransaction() {
+		return target.importRedshiftWithTx(ctx, record, cap)
+	} else {
+		return target.importRedshiftWithoutTx(ctx, record, cap)
+	}
+}
+
+func (target *Target) importRedshiftWithTx(ctx context.Context, record *EventRecord, cap *[]string) error {
 	log.Printf("[info] Import to target %s from record %s", target, record)
-	db, err := ConnectToRedshift(ctx, target)
+	db, err := target.ConnectToRedshift(ctx)
 	if err != nil {
 		return err
 	}
@@ -141,5 +151,25 @@ func ImportRedshift(ctx context.Context, target *Target, record *EventRecord, ca
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func (target *Target) importRedshiftWithoutTx(ctx context.Context, record *EventRecord, cap *[]string) error {
+	log.Printf("[info] Import to target %s from record %s", target, record)
+	db, err := target.ConnectToRedshift(ctx)
+	if err != nil {
+		return err
+	}
+
+	query, err := target.BuildCopySQL(record.S3.Object.Key, config.Credentials, cap)
+	if err != nil {
+		return err
+	}
+	log.Println("[debug] SQL:", query)
+
+	if _, err := db.Exec(query); err != nil {
+		return err
+	}
+
 	return nil
 }

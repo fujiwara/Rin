@@ -24,6 +24,9 @@ const (
 	S3URITemplate = "s3://%s/%s"
 	SQLTemplate   = "/* Rin */ COPY %s FROM %s CREDENTIALS '%s' REGION '%s' %s"
 	// Prefix SQL comment "/* Rin */". Because a query which start with "COPY", pq expect a PostgreSQL COPY command response, but a Redshift response is different it.
+
+	DriverPostgres     = "postgres"
+	DriverRedshiftData = "redshift-data"
 )
 
 func quoteValue(v string) string {
@@ -165,8 +168,18 @@ func (s3 S3) String() string {
 }
 
 type Redshift struct {
-	Host             string `yaml:"host"`
-	Port             int    `yaml:"port"`
+	Driver string `yaml:"driver"`
+
+	// for postgres driver
+	Host string `yaml:"host"`
+	Port int    `yaml:"port"`
+
+	// for redshift-data driver provisioned
+	Cluster string `yaml:"cluster"`
+
+	// for redshift-data driver serverless
+	Workgroup string `yaml:"workgroup"`
+
 	DBName           string `yaml:"dbname"`
 	User             string `yaml:"user"`
 	Password         string `yaml:"password"`
@@ -175,25 +188,54 @@ type Redshift struct {
 	ReconnectOnError *bool  `yaml:"reconnect_on_error"`
 }
 
-func (r Redshift) DSN() string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s",
-		url.QueryEscape(r.User), url.QueryEscape(r.Password),
-		url.QueryEscape(r.Host), r.Port, url.QueryEscape(r.DBName),
-	)
+func (r Redshift) UseTransaction() bool {
+	// redshift-data driver does not support transaction
+	// https://github.com/mashiike/redshift-data-sql-driver#unsupported-features
+	return r.Driver == DriverPostgres
 }
 
-func (r Redshift) DSNWith(user, password string) string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s",
-		url.QueryEscape(user), url.QueryEscape(password),
-		url.QueryEscape(r.Host), r.Port, url.QueryEscape(r.DBName),
-	)
+func (r Redshift) DSN() string {
+	return r.DSNWith(r.User, r.Password)
+}
+
+func (r Redshift) DSNWith(user string, password string) string {
+	switch r.Driver {
+	case DriverPostgres:
+		var p string
+		if password != "" {
+			p = url.QueryEscape(password)
+		} else {
+			p = "****"
+		}
+		return fmt.Sprintf("postgres://%s:%s@%s:%d/%s",
+			url.QueryEscape(user), p,
+			url.QueryEscape(r.Host), r.Port, url.QueryEscape(r.DBName),
+		)
+	case DriverRedshiftData:
+		if r.Workgroup != "" {
+			return fmt.Sprintf("workgroup(%s)/%s",
+				url.QueryEscape(r.Workgroup),
+				url.QueryEscape(r.DBName),
+			)
+		} else if r.Cluster != "" {
+			return fmt.Sprintf("%s@cluster(%s)/%s",
+				url.QueryEscape(user),
+				url.QueryEscape(r.Cluster),
+				url.QueryEscape(r.DBName),
+			)
+		}
+		panic("redshift-data driver requires workgroup or cluster")
+	default:
+		panic("unknown driver: " + r.Driver)
+	}
 }
 
 func (r Redshift) VisibleDSN() string {
-	return fmt.Sprintf("redshift://%s:****@%s:%d/%s",
-		url.QueryEscape(r.User),
-		url.QueryEscape(r.Host), r.Port, url.QueryEscape(r.DBName),
-	)
+	if r.Driver == DriverPostgres {
+		return strings.Replace(r.DSNWith(r.User, ""), "postgres://", "redshift://", 1)
+	} else {
+		return r.Driver + "://" + r.DSN()
+	}
 }
 
 func (r Redshift) String() string {
@@ -275,7 +317,11 @@ func LoadConfig(ctx context.Context, path string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	var c Config
+	var c Config = Config{
+		Redshift: &Redshift{
+			Driver: DriverPostgres, // default
+		},
+	}
 	err = goconfig.LoadWithEnvBytes(&c, src)
 	if err != nil {
 		return nil, err
@@ -288,6 +334,12 @@ func LoadConfig(ctx context.Context, path string) (*Config, error) {
 }
 
 func (c *Config) validate() error {
+	switch c.Redshift.Driver {
+	case DriverPostgres, DriverRedshiftData: // ok
+		log.Println("[debug] redshift.driver is", c.Redshift.Driver)
+	default:
+		return fmt.Errorf("invalid redshift.driver must be %s or %s", DriverPostgres, DriverRedshiftData)
+	}
 	if c.QueueName == "" {
 		if !isLambda() {
 			return fmt.Errorf("queue_name required")
@@ -333,6 +385,15 @@ func (c *Config) merge() error {
 			}
 			if tr.ReconnectOnError == nil {
 				tr.ReconnectOnError = cr.ReconnectOnError
+			}
+			if tr.Driver == "" {
+				tr.Driver = cr.Driver
+			}
+			if tr.Workgroup == "" {
+				tr.Workgroup = cr.Workgroup
+			}
+			if tr.Cluster == "" {
+				tr.Cluster = cr.Cluster
 			}
 		}
 
