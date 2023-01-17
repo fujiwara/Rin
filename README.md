@@ -110,10 +110,10 @@ When the password for Redshift is empty, Rin will try call [GetClusterCredential
 Rin requires credentials for SQS and Redshift.
 
 1. `credentials.aws_access_key_id` and `credentials.aws_secret_access_key`
-  - used for SQS and Redshift.
+  - used for SQS and Redshift(COPY query and Data API access).
 2. `credentials.aws_iam_role`
-  - used for Redshift only.
-  - for SQS, Rin will try to get a instance credentials.
+  - used for Redshift COPY query only.
+  - for SQS and Redshift Data API, Rin will try to get a instance credentials.
 
 ## Run
 
