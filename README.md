@@ -139,3 +139,47 @@ Rin process new SQS messages and exit.
 ```
 $ rin -config config.yaml -batch [-debug]
 ```
+
+## SQL Drivers
+
+Rin has two ways to connect to Redshift.
+
+### `postgres` driver
+
+`postgres` driver is the default. Rin connects to Redshift with PostgreSQL protocol over TCP in the VPC network.
+
+`host`, `port`, `user` and `password` fields are required in the `redshift` section.
+
+```yaml
+redshift:
+  driver: postgres # default
+  host: localhost
+  port: 5439
+  user: test_user
+  password: '{{ must_env "REDSHIFT_PASSWORD" }}'
+```
+
+### `redshift-data` driver
+
+`redshift-data` driver connects to Redshift via [Redshift Data API](https://docs.aws.amazon.com/redshift/latest/mgmt/data-api.html).
+
+Redshift Data API does not require a VPC network.
+
+With provisoned cluster, `driver`, `cluster` and `user` are required.
+
+```yaml
+redshift:
+  driver: redshift-data
+  cluster: your-cluster-name
+  user: test_user
+```
+
+With Redshift serverless, `driver`, `workgroup` are required.
+
+```yaml
+redshift:
+  driver: redshift-data
+  workgroup: your-workgroup-name
+```
+
+See also [github.com/mashiike/redshift-data-sql-driver](https://github.com/mashiike/redshift-data-sql-driver).
