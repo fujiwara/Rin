@@ -94,7 +94,7 @@ func TestLocalStack(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	if err := rin.RunWithContext(ctx, "s3://rin-test/localstack.yml", false); err != nil {
+	if err := rin.RunWithContext(ctx, "s3://rin-test/localstack.yml", &rin.Option{BatchMode: false}); err != nil {
 		t.Error(err)
 	}
 }

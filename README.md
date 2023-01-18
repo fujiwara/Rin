@@ -140,6 +140,10 @@ Rin process new SQS messages and exit.
 $ rin -config config.yaml -batch [-debug]
 ```
 
+## Set max execution time
+
+A CLI option `-max-execution-time` is set max execution time for running SQS worker and batch process.
+
 ## SQL Drivers
 
 Rin has two ways to connect to Redshift.
