@@ -20,18 +20,19 @@ func main() {
 	var (
 		config      string
 		showVersion bool
-		batchMode   bool
 		debug       bool
 		dryRun      bool
 	)
+	opt := &rin.Option{}
 	flag.StringVar(&config, "config", "config.yaml", "config file path")
 	flag.StringVar(&config, "c", "config.yaml", "config file path")
 	flag.BoolVar(&debug, "debug", false, "enable debug logging")
 	flag.BoolVar(&debug, "d", false, "enable debug logging")
 	flag.BoolVar(&showVersion, "version", false, "show version")
 	flag.BoolVar(&showVersion, "v", false, "show version")
-	flag.BoolVar(&batchMode, "batch", false, "batch mode")
-	flag.BoolVar(&batchMode, "b", false, "batch mode")
+	flag.BoolVar(&opt.BatchMode, "batch", false, "batch mode")
+	flag.BoolVar(&opt.BatchMode, "b", false, "batch mode")
+	flag.DurationVar(&opt.MaxExecutionTime, "max-execution-time", 0, "max execution time")
 	flag.BoolVar(&dryRun, "dry-run", false, "dry run mode (load configuration only)")
 	flag.VisitAll(func(f *flag.Flag) {
 		if len(f.Name) <= 1 {
@@ -65,7 +66,7 @@ func main() {
 	if dryRun {
 		run = rin.DryRun
 	}
-	if err := run(config, batchMode); err != nil {
+	if err := run(config, opt); err != nil {
 		log.Println("[error]", err)
 		os.Exit(1)
 	}
