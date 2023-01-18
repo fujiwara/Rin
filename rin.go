@@ -2,7 +2,6 @@ package rin
 
 import (
 	"context"
-	"errors"
 	"log"
 	"os"
 	"os/signal"
@@ -11,10 +10,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/aws/aws-lambda-go/events"
-	"github.com/aws/aws-lambda-go/lambda"
-	redshiftdatasqldriver "github.com/mashiike/redshift-data-sql-driver"
-
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -22,6 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/redshiftdata"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	redshiftdatasqldriver "github.com/mashiike/redshift-data-sql-driver"
 )
 
 var config *Config
@@ -114,10 +110,9 @@ func RunWithContext(ctx context.Context, configFile string, batchMode bool) erro
 	}
 
 	if isLambda() {
-		return runLambdaHandler()
+		return runLambdaHandler(batchMode)
 	}
 
-	sqsSvc := sqs.NewFromConfig(*Sessions.SQS, Sessions.SQSOptFns...)
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, TrapSignals...)
 	ctx, cancel := context.WithCancel(ctx)
@@ -138,7 +133,7 @@ func RunWithContext(ctx context.Context, configFile string, batchMode bool) erro
 	}()
 
 	// run worker
-	err = sqsWorker(ctx, &wg, sqsSvc, batchMode)
+	err = sqsWorker(ctx, &wg, batchMode)
 
 	wg.Wait()
 	log.Println("[info] Shutdown.")
@@ -153,7 +148,8 @@ func isLambda() bool {
 	return strings.HasPrefix(os.Getenv("AWS_EXECUTION_ENV"), "AWS_Lambda") || os.Getenv("AWS_LAMBDA_RUNTIME_API") != ""
 }
 
-func sqsWorker(ctx context.Context, wg *sync.WaitGroup, svc *sqs.Client, batchMode bool) error {
+func sqsWorker(ctx context.Context, wg *sync.WaitGroup, batchMode bool) error {
+	svc := sqs.NewFromConfig(*Sessions.SQS, Sessions.SQSOptFns...)
 	var mode string
 	if batchMode {
 		mode = "Batch"
@@ -178,8 +174,9 @@ func sqsWorker(ctx context.Context, wg *sync.WaitGroup, svc *sqs.Client, batchMo
 		default:
 		}
 		if err := handleMessage(ctx, svc, res.QueueUrl); err != nil {
-			if _, ok := err.(NoMessageError); ok {
+			if e, ok := err.(NoMessageError); ok {
 				if batchMode {
+					log.Printf("[info] %s. Exit.", e.Error())
 					break
 				}
 				time.Sleep(100 * time.Millisecond)
@@ -270,34 +267,5 @@ func processEvent(ctx context.Context, msgId string, body string) error {
 			log.Printf("[info] [%s] %d actions completed.", msgId, n)
 		}
 	}
-	return nil
-}
-
-type SQSBatchResponse struct {
-	BatchItemFailures []BatchItemFailureItem `json:"batchItemFailures,omitempty"`
-}
-
-type BatchItemFailureItem struct {
-	ItemIdentifier string `json:"itemIdentifier"`
-}
-
-func runLambdaHandler() error {
-	log.Println("[info] start lambda handler")
-	lambda.StartWithOptions(func(ctx context.Context, event *events.SQSEvent) (*SQSBatchResponse, error) {
-		resp := &SQSBatchResponse{
-			BatchItemFailures: nil,
-		}
-		for _, record := range event.Records {
-			if record.MessageId == "" {
-				return nil, errors.New("sqs message id is empty")
-			}
-			if err := processEvent(ctx, record.MessageId, record.Body); err != nil {
-				resp.BatchItemFailures = append(resp.BatchItemFailures, BatchItemFailureItem{
-					ItemIdentifier: record.MessageId,
-				})
-			}
-		}
-		return resp, nil
-	})
 	return nil
 }
