@@ -50,8 +50,8 @@ func newLambdaSQSBatchHandler(opt *Option) func(ctx context.Context) error {
 	return func(ctx context.Context) error {
 		var wg sync.WaitGroup
 		wg.Add(1)
-		defer wg.Done()
 		err := sqsWorker(ctx, &wg, opt)
+		wg.Wait()
 		if e, ok := err.(MaxExecutionTimeReachedError); ok {
 			log.Printf("[info] %s", e.Error())
 			return nil
