@@ -18,10 +18,10 @@ type BatchItemFailureItem struct {
 	ItemIdentifier string `json:"itemIdentifier"`
 }
 
-func runLambdaHandler(batchMode bool) error {
-	if batchMode {
+func runLambdaHandler(opt *Option) error {
+	if opt.BatchMode {
 		log.Printf("[info] starting lambda handler SQS batch mode")
-		lambda.Start(lambdaSQSBatchHandler)
+		lambda.Start(newLambdaSQSBatchHandler(opt))
 	} else {
 		log.Printf("[info] starting lambda handler SQS event mode")
 		lambda.Start(lambdaSQSEventHandler)
@@ -46,10 +46,12 @@ func lambdaSQSEventHandler(ctx context.Context, event *events.SQSEvent) (*SQSBat
 	return resp, nil
 }
 
-func lambdaSQSBatchHandler(ctx context.Context) error {
-	var wg sync.WaitGroup
-	wg.Add(1)
-	err := sqsWorker(ctx, &wg, true)
-	wg.Done()
-	return err
+func newLambdaSQSBatchHandler(opt *Option) func(ctx context.Context) error {
+	return func(ctx context.Context) error {
+		var wg sync.WaitGroup
+		wg.Add(1)
+		err := sqsWorker(ctx, &wg, opt)
+		wg.Done()
+		return err
+	}
 }

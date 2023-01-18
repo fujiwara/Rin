@@ -24,6 +24,11 @@ var config *Config
 var MaxDeleteRetry = 8
 var Sessions *SessionStore
 
+type Option struct {
+	MaxExecutionTime time.Duration
+	BatchMode        bool
+}
+
 func init() {
 	Sessions = &SessionStore{}
 	redshiftdatasqldriver.RedshiftDataClientConstructor = func(ctx context.Context, cfg *redshiftdatasqldriver.RedshiftDataConfig) (redshiftdatasqldriver.RedshiftDataClient, error) {
@@ -55,7 +60,7 @@ func (e NoMessageError) Error() string {
 	return e.s
 }
 
-func DryRun(configFile string, batchMode bool) error {
+func DryRun(configFile string, opt *Option) error {
 	ctx := context.Background()
 	var err error
 	log.Println("[info] Loading config:", configFile)
@@ -69,11 +74,11 @@ func DryRun(configFile string, batchMode bool) error {
 	return nil
 }
 
-func Run(configFile string, batchMode bool) error {
-	return RunWithContext(context.Background(), configFile, batchMode)
+func Run(configFile string, opt *Option) error {
+	return RunWithContext(context.Background(), configFile, opt)
 }
 
-func RunWithContext(ctx context.Context, configFile string, batchMode bool) error {
+func RunWithContext(ctx context.Context, configFile string, opt *Option) error {
 	var err error
 	log.Println("[info] Loading config:", configFile)
 	config, err = LoadConfig(ctx, configFile)
@@ -110,7 +115,7 @@ func RunWithContext(ctx context.Context, configFile string, batchMode bool) erro
 	}
 
 	if isLambda() {
-		return runLambdaHandler(batchMode)
+		return runLambdaHandler(opt)
 	}
 
 	signalCh := make(chan os.Signal, 1)
@@ -133,7 +138,7 @@ func RunWithContext(ctx context.Context, configFile string, batchMode bool) erro
 	}()
 
 	// run worker
-	err = sqsWorker(ctx, &wg, batchMode)
+	err = sqsWorker(ctx, &wg, opt)
 
 	wg.Wait()
 	log.Println("[info] Shutdown.")
@@ -148,10 +153,10 @@ func isLambda() bool {
 	return strings.HasPrefix(os.Getenv("AWS_EXECUTION_ENV"), "AWS_Lambda") || os.Getenv("AWS_LAMBDA_RUNTIME_API") != ""
 }
 
-func sqsWorker(ctx context.Context, wg *sync.WaitGroup, batchMode bool) error {
+func sqsWorker(ctx context.Context, wg *sync.WaitGroup, opt *Option) error {
 	svc := sqs.NewFromConfig(*Sessions.SQS, Sessions.SQSOptFns...)
 	var mode string
-	if batchMode {
+	if opt.BatchMode {
 		mode = "Batch"
 	} else {
 		mode = "Worker"
@@ -175,7 +180,7 @@ func sqsWorker(ctx context.Context, wg *sync.WaitGroup, batchMode bool) error {
 		}
 		if err := handleMessage(ctx, svc, res.QueueUrl); err != nil {
 			if e, ok := err.(NoMessageError); ok {
-				if batchMode {
+				if opt.BatchMode {
 					log.Printf("[info] %s. Exit.", e.Error())
 					break
 				}
