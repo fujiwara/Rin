@@ -4,7 +4,7 @@ export GO111MODULE := on
 
 .PHONY: test test-localstack install clean image release-image
 
-cmd/rin/rin: config.go redshift.go rin.go event.go cmd/rin/main.go
+cmd/rin/rin: *.go cmd/rin/main.go
 	cd cmd/rin && go build -ldflags "-s -w -X main.version=${GIT_VER} -X main.buildDate=${DATE}"
 
 install: cmd/rin/rin

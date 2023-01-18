@@ -38,7 +38,8 @@ func main() {
 		if len(f.Name) <= 1 {
 			return
 		}
-		if s := os.Getenv(strings.ToUpper("RIN_" + f.Name)); s != "" {
+		envName := strings.ToUpper("RIN_" + strings.Replace(f.Name, "-", "_", -1))
+		if s := os.Getenv(envName); s != "" {
 			f.Value.Set(s)
 		}
 	})
@@ -61,6 +62,7 @@ func main() {
 	}
 	log.SetOutput(filter)
 	log.Println("[info] rin version:", version)
+	log.Println("[info] option:", opt.String())
 
 	run := rin.Run
 	if dryRun {

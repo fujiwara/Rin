@@ -2,6 +2,7 @@ package rin
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -25,8 +26,15 @@ var MaxDeleteRetry = 8
 var Sessions *SessionStore
 
 type Option struct {
-	MaxExecutionTime time.Duration
-	BatchMode        bool
+	MaxExecutionTime time.Duration `json:"max_execution_time"`
+	BatchMode        bool          `json:"batch_mode"`
+}
+
+func (o *Option) String() string {
+	return strings.Join([]string{
+		"MaxExecutionTime: " + o.MaxExecutionTime.String(),
+		fmt.Sprintf("BatchMode: %v", o.BatchMode),
+	}, ", ")
 }
 
 func init() {
@@ -58,6 +66,12 @@ type NoMessageError struct {
 
 func (e NoMessageError) Error() string {
 	return e.s
+}
+
+type MaxExecutionTimeReachedError struct{}
+
+func (e MaxExecutionTimeReachedError) Error() string {
+	return "max execution time reached"
 }
 
 func DryRun(configFile string, opt *Option) error {
@@ -139,6 +153,10 @@ func RunWithContext(ctx context.Context, configFile string, opt *Option) error {
 
 	// run worker
 	err = sqsWorker(ctx, &wg, opt)
+	if e, ok := err.(MaxExecutionTimeReachedError); ok {
+		log.Printf("[info] %s", e.Error())
+		cancel()
+	}
 
 	wg.Wait()
 	log.Println("[info] Shutdown.")
@@ -172,8 +190,16 @@ func sqsWorker(ctx context.Context, wg *sync.WaitGroup, opt *Option) error {
 	if err != nil {
 		return err
 	}
+	var timeout <-chan time.Time
+	if opt.MaxExecutionTime > 0 {
+		timeout = time.NewTimer(opt.MaxExecutionTime).C
+	} else {
+		timeout = make(chan time.Time, 1) // never timeout
+	}
 	for {
 		select {
+		case <-timeout:
+			return MaxExecutionTimeReachedError{}
 		case <-ctx.Done():
 			return nil
 		default:
